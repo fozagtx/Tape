@@ -98,10 +98,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       await ethereum.request({
         method: "wallet_addEthereumChain",
         params: [{
-          chainId: "0x407",
-          chainName: "BOT Chain",
-          rpcUrls: ["https://rpc.botchain.ai"],
-          blockExplorerUrls: ["https://explorer.botchain.ai"],
+          chainId: CHAIN_CONFIG.chainIdHex,
+          chainName: "BOT Chain Testnet",
+          rpcUrls: [CHAIN_CONFIG.rpcUrl],
+          blockExplorerUrls: [CHAIN_CONFIG.explorerUrl],
           nativeCurrency: { name: "BOT", symbol: "BOT", decimals: 18 },
         }],
       });

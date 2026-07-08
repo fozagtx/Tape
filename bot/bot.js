@@ -5,7 +5,7 @@ const { ethers } = require("ethers");
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const CONTRACT    = process.env.CONTRACT;
-const RPC         = process.env.RPC || "https://rpc.botchain.ai";
+const RPC         = process.env.RPC || "https://rpc.bohr.life";
 
 if (!PRIVATE_KEY || !CONTRACT) {
   console.error("Set PRIVATE_KEY and CONTRACT env vars");

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useWallet } from "./WalletProvider";
 import { ethers } from "ethers";
 import { TAPE_ABI } from "@/lib/abi";
+import { CHAIN_CONFIG } from "@/lib/config";
 
 const BYTECODE = "0x608060405234801561001057600080fd5b5060016001600281919091556000600355600060045560006005556000600655610b7e8061003c6000396000f3fe";
 
@@ -13,7 +14,7 @@ export default function DeployContract() {
   const [error, setError] = useState<string | null>(null);
   const [contractInput, setContractInput] = useState("");
 
-  const isCorrectChain = chainId === 1031;
+  const isCorrectChain = chainId === CHAIN_CONFIG.chainId;
 
   const handleDeploy = async () => {
     if (!signer) { setError("Connect wallet first"); return; }
