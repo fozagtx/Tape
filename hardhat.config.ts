@@ -1,5 +1,6 @@
 import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
+import "dotenv/config";
 
 const config: HardhatUserConfig = {
   solidity: "0.8.26", // matches lib/bytecode.ts (solc 0.8.26, satisfies pragma ^0.8.20)

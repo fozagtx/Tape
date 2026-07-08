@@ -31,7 +31,7 @@ export default function TradeForm() {
     Number.isFinite(qtyNum) &&
     qtyNum > 0 &&
     Number.isInteger(qtyNum);
-  const total = valid ? (priceNum * qtyNum).toFixed(4) : "—";
+  const total = valid ? (priceNum * qtyNum).toFixed(4) : "-";
 
   const onCorrectChain = chainId === CHAIN_CONFIG.chainId;
   const canSubmit = isConnected && onCorrectChain && valid && !isSubmitting;
@@ -87,7 +87,7 @@ export default function TradeForm() {
         </Chip>
       }
     >
-      {/* body: p-4, stack gap-4 — uniform 16px rhythm */}
+      {/* body: p-4, stack gap-4 - uniform 16px rhythm */}
       <div className="flex flex-col gap-4 p-4">
         <ButtonGroup fullWidth size="md" radius="md" variant="flat">
           <Button
@@ -173,8 +173,8 @@ export default function TradeForm() {
         </CellWrapper>
 
         <p className="text-tiny leading-relaxed text-default-400">
-          Orders settle on-chain (~0.75s blocks). Gas is paid in BOT — check
-          your wallet for the exact fee.
+          Orders settle on-chain (~0.75s blocks). Gas is paid in BOT. Confirm
+          the fee in your wallet before signing.
         </p>
 
         <Button

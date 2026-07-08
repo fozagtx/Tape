@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Card, Chip, Skeleton, Spacer, cn } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import {
@@ -12,110 +12,27 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { EventLog } from "ethers";
-import { useWallet } from "./WalletProvider";
+import { useMarket } from "./MarketProvider";
 import EmptyState from "./ui/empty-state";
 
-interface Point {
-  price: number;
-  ts: number;
-  label: string;
-}
-
-/** design-promax Graphs pattern — Card + AreaChart + Chip delta */
 export default function PriceChart() {
-  const { contract } = useWallet();
-  const [points, setPoints] = useState<Point[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { ready, live, error, trades } = useMarket();
 
-  useEffect(() => {
-    if (!contract) return;
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const filter = contract.filters.OrderMatched();
-        const events = await contract.queryFilter(filter, -2000);
-        if (cancelled) return;
-        const provider = contract.runner?.provider;
-        const parsed: Point[] = [];
-        const blockCache = new Map<number, number>();
-
-        for (const ev of events) {
-          const e = ev as EventLog;
-          const price = Number(e.args?.price || 0) / 1e9;
-          if (!(price > 0)) continue;
-          let ts = Date.now();
-          const bn = e.blockNumber;
-          if (provider && typeof bn === "number") {
-            if (!blockCache.has(bn)) {
-              try {
-                const block = await provider.getBlock(bn);
-                blockCache.set(
-                  bn,
-                  block?.timestamp ? block.timestamp * 1000 : Date.now()
-                );
-              } catch {
-                blockCache.set(bn, Date.now());
-              }
-            }
-            ts = blockCache.get(bn) ?? Date.now();
-          }
-          parsed.push({
-            price,
-            ts,
-            label: new Date(ts).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          });
-        }
-
-        if (!cancelled) {
-          setPoints(parsed.slice(-80));
-          setError(null);
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Could not load trade history.");
-          setLoading(false);
-        }
-      }
-    })();
-
-    const onMatch = (
-      _a: bigint,
-      _b: bigint,
-      _c: string,
-      _d: string,
-      price: bigint
-    ) => {
-      const p = Number(price) / 1e9;
-      if (!(p > 0)) return;
-      const ts = Date.now();
-      setPoints((prev) =>
-        [
-          ...prev,
-          {
-            price: p,
-            ts,
-            label: new Date(ts).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        ].slice(-80)
-      );
-    };
-
-    contract.on("OrderMatched", onMatch);
-    return () => {
-      cancelled = true;
-      contract.off("OrderMatched", onMatch);
-    };
-  }, [contract]);
+  const points = useMemo(
+    () =>
+      [...trades]
+        .reverse()
+        .filter((t) => t.price > 0)
+        .map((t) => ({
+          price: t.price,
+          label: new Date(t.ts).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          }),
+        })),
+    [trades]
+  );
 
   const summary = useMemo(() => {
     if (points.length === 0) return null;
@@ -135,10 +52,12 @@ export default function PriceChart() {
     };
   }, [points]);
 
+  const loading = !ready;
+
   return (
     <Card
       as="dl"
-      className="border border-transparent dark:border-default-100"
+      className="border border-default-100 bg-content1"
       shadow="none"
     >
       <section className="flex flex-col p-4 sm:p-6">
@@ -146,7 +65,7 @@ export default function PriceChart() {
           <div className="min-w-0">
             <dt className="text-medium font-medium text-foreground">Price</dt>
             <p className="text-tiny text-default-500">
-              On-chain fills only · gwei
+              {live ? "Live fills" : "Fill history"} · gwei
             </p>
           </div>
           {summary && (
@@ -186,11 +105,12 @@ export default function PriceChart() {
 
         {loading && <Skeleton className="h-44 w-full rounded-medium" />}
 
-        {!loading && error && (
+        {!loading && error && !summary && (
           <EmptyState
             className="h-44 py-0"
             icon="solar:danger-triangle-linear"
-            title={error}
+            title="Chart offline"
+            description={error}
           />
         )}
 
@@ -199,11 +119,11 @@ export default function PriceChart() {
             className="h-44 py-0"
             icon="solar:chart-linear"
             title="No trades yet"
-            description="Place a buy and sell at overlapping prices to print a match. Chart builds from real on-chain fills only."
+            description="Chart updates in real time when orders match on-chain."
           />
         )}
 
-        {!loading && !error && summary && (
+        {!loading && summary && (
           <div className="h-44 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
@@ -301,7 +221,7 @@ export default function PriceChart() {
                   summary.up ? "text-success" : "text-danger"
                 )}
               >
-                {points.length} fill{points.length === 1 ? "" : "s"}
+                {points.length} fills
               </span>
               <span className="font-mono tabular-nums">
                 High {summary.max.toFixed(4)}

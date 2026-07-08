@@ -8,7 +8,7 @@ export type CellValueProps = React.HTMLAttributes<HTMLDivElement> & {
   value?: React.ReactNode;
 };
 
-/** design-promax cell-value — label left, value right */
+/** design-promax cell-value - label left, value right */
 const CellValue = React.forwardRef<HTMLDivElement, CellValueProps>(
   ({ label, value, children, className, ...props }, ref) => (
     <div

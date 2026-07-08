@@ -1,29 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Card, Chip, Skeleton, cn } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { useWallet } from "./WalletProvider";
+import { useMarket } from "./MarketProvider";
 
-interface Stats {
-  totalOrders: number;
-  bids: number;
-  asks: number;
-  matches: number;
-  bestBid: number | null;
-  bestAsk: number | null;
-}
-
-const EMPTY: Stats = {
-  totalOrders: 0,
-  bids: 0,
-  asks: 0,
-  matches: 0,
-  bestBid: null,
-  bestAsk: null,
-};
-
-/** design-promax KPI TrendCard pattern */
 type TrendCardProps = {
   title: string;
   value: string | null;
@@ -37,7 +18,7 @@ const TrendCard = React.forwardRef<HTMLDivElement, TrendCardProps>(
     <Card
       ref={ref}
       as="div"
-      className="border border-transparent dark:border-default-100"
+      className="border border-default-100 bg-content1"
       shadow="none"
     >
       <div className="relative flex p-4">
@@ -86,68 +67,20 @@ const TrendCard = React.forwardRef<HTMLDivElement, TrendCardProps>(
 TrendCard.displayName = "TrendCard";
 
 export default function MarketStats() {
-  const { contract } = useWallet();
-  const [stats, setStats] = useState<Stats>(EMPTY);
-  const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    if (!contract) return;
-    let cancelled = false;
-
-    const fetchStats = async () => {
-      try {
-        const [total, bids, asks, matches] = await contract.stats();
-        let bestBid: number | null = null;
-        let bestAsk: number | null = null;
-        try {
-          const bb = await contract.getBestBid();
-          const ba = await contract.getBestAsk();
-          const bp = Number(bb.price ?? bb[0] ?? 0) / 1e9;
-          const ap = Number(ba.price ?? ba[0] ?? 0) / 1e9;
-          bestBid = bp > 0 ? bp : null;
-          bestAsk = ap > 0 ? ap : null;
-        } catch {
-          /* optional */
-        }
-        if (!cancelled) {
-          setStats({
-            totalOrders: Number(total),
-            bids: Number(bids),
-            asks: Number(asks),
-            matches: Number(matches),
-            bestBid,
-            bestAsk,
-          });
-          setLoading(false);
-          setFailed(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setFailed(true);
-          setLoading(false);
-        }
-      }
-    };
-
-    void fetchStats();
-    const iv = setInterval(fetchStats, 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [contract]);
+  const { ready, live, error, stats } = useMarket();
 
   const mid =
     stats.bestBid != null && stats.bestAsk != null
       ? (stats.bestBid + stats.bestAsk) / 2
       : (stats.bestBid ?? stats.bestAsk);
 
+  const loading = !ready;
+
   const cards: TrendCardProps[] = [
     {
       title: "Mid / last",
-      value: mid != null ? mid.toFixed(4) : loading ? null : "—",
-      hint: mid != null ? "gwei" : "no quote yet",
+      value: loading ? null : mid != null ? mid.toFixed(4) : "-",
+      hint: mid != null ? "gwei" : "no quote",
       changeType: "warning",
       icon: "solar:chart-2-linear",
     },
@@ -168,21 +101,23 @@ export default function MarketStats() {
     {
       title: "Matches",
       value: loading ? null : String(stats.matches),
-      hint: `${stats.totalOrders} orders ever`,
+      hint: live ? "live" : `${stats.totalOrders} orders`,
       changeType: "neutral",
       icon: "solar:transfer-horizontal-linear",
     },
   ];
 
   return (
-    <div className="flex flex-col gap-2">
-      {failed && (
-        <p className="text-tiny text-danger">
-          Could not refresh market stats. Retrying…
-        </p>
+    <div className="flex flex-col gap-3">
+      {error && (
+        <div
+          role="alert"
+          className="rounded-medium border border-warning/30 bg-warning/10 px-4 py-3 text-tiny text-warning sm:text-small"
+        >
+          {error}
+        </div>
       )}
-      {/* design-promax KPI grid: gap-5, 1→2→4 cols */}
-      <dl className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+      <dl className="grid w-full grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 lg:gap-5">
         {cards.map((c) => (
           <TrendCard key={c.title} {...c} />
         ))}

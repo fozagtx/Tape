@@ -15,107 +15,143 @@ import {
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import NextLink from "next/link";
+import { useRouter } from "next/navigation";
+import { useWallet } from "./WalletProvider";
 
 const nav = [
   { label: "How it works", href: "#how" },
   { label: "Features", href: "#features" },
-  { label: "Why BOT", href: "#why" },
+  { label: "Design", href: "#why" },
 ];
 
-/** design-promax basic-navbar adapted for Tape landing */
 export default function LandingHeader() {
+  const router = useRouter();
+  const { isConnected, isConnecting, connect, hasWallet, error, clearError } =
+    useWallet();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  const enterTrade = async () => {
+    clearError();
+    if (isConnected) {
+      router.push("/trade");
+      return;
+    }
+    setBusy(true);
+    try {
+      const ok = await connect();
+      if (ok) router.push("/trade");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <Navbar
-      maxWidth="full"
-      height="60px"
-      isMenuOpen={isMenuOpen}
-      onMenuOpenChange={setIsMenuOpen}
-      classNames={{
-        base: cn("border-default-100 bg-background/80 backdrop-blur-md", {
-          "bg-default-100/80": isMenuOpen,
-        }),
-        wrapper: "w-full max-w-[var(--tape-max)] px-4 md:px-6 lg:px-8",
-        item: "hidden md:flex",
-      }}
-    >
-      <NavbarBrand as={NextLink} href="/" className="min-w-0 gap-2">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-          <span className="font-mono text-small font-bold">T</span>
-        </div>
-        <span className="text-small font-medium text-foreground">Tape</span>
-      </NavbarBrand>
+    <header className="sticky top-0 z-40 w-full border-b border-default-100 bg-background/95 backdrop-blur-md">
+      <Navbar
+        maxWidth="full"
+        height="60px"
+        isBordered={false}
+        isBlurred={false}
+        position="static"
+        isMenuOpen={isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+        classNames={{
+          base: "bg-transparent",
+          wrapper: "w-full max-w-[var(--tape-max)] px-4 md:px-6 lg:px-8",
+          item: "hidden md:flex",
+        }}
+      >
+        <NavbarBrand as={NextLink} href="/" className="min-w-0 gap-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+            <span className="font-mono text-small font-bold">T</span>
+          </div>
+          <span className="text-small font-medium text-foreground">Tape</span>
+        </NavbarBrand>
 
-      <NavbarContent justify="center" className="hidden gap-6 md:flex">
-        {nav.map((item) => (
-          <NavbarItem key={item.href}>
-            <Link
-              href={item.href}
+        <NavbarContent justify="center" className="hidden gap-6 md:flex">
+          {nav.map((item) => (
+            <NavbarItem key={item.href}>
+              <Link
+                href={item.href}
+                size="sm"
+                className="text-default-500 hover:text-foreground"
+              >
+                {item.label}
+              </Link>
+            </NavbarItem>
+          ))}
+        </NavbarContent>
+
+        <NavbarContent justify="end" className="gap-2">
+          <NavbarItem>
+            <Button
+              radius="full"
+              color="primary"
               size="sm"
-              className="text-default-500 hover:text-foreground"
+              className="min-h-9 font-medium"
+              isLoading={busy || isConnecting}
+              onPress={() => void enterTrade()}
+              endContent={
+                !(busy || isConnecting) ? (
+                  <Icon icon="solar:alt-arrow-right-linear" width={16} />
+                ) : undefined
+              }
             >
-              {item.label}
-            </Link>
+              {isConnected
+                ? "Open dashboard"
+                : hasWallet === false
+                  ? "Install wallet"
+                  : "Connect & trade"}
+            </Button>
           </NavbarItem>
-        ))}
-      </NavbarContent>
+          <NavbarMenuToggle className="text-default-400 md:hidden" />
+        </NavbarContent>
 
-      <NavbarContent justify="end" className="gap-2">
-        <NavbarItem className="hidden sm:flex">
-          <Button
-            as={NextLink}
-            href="/trade"
-            radius="full"
-            variant="flat"
-            size="sm"
-            className="min-h-9 text-default-600"
-          >
-            Open book
-          </Button>
-        </NavbarItem>
-        <NavbarItem>
-          <Button
-            as={NextLink}
-            href="/trade"
-            radius="full"
-            color="primary"
-            size="sm"
-            className="min-h-9 font-medium"
-            endContent={<Icon icon="solar:alt-arrow-right-linear" width={16} />}
-          >
-            Start trading
-          </Button>
-        </NavbarItem>
-        <NavbarMenuToggle className="text-default-400 md:hidden" />
-      </NavbarContent>
-
-      <NavbarMenu className="top-[calc(var(--navbar-height)_-_1px)] gap-2 bg-background/95 pt-4 backdrop-blur-md">
-        {nav.map((item) => (
-          <NavbarMenuItem key={item.href}>
-            <Link
-              href={item.href}
-              size="lg"
-              className="w-full text-default-600"
-              onPress={() => setIsMenuOpen(false)}
+        <NavbarMenu className="gap-2 border-b border-default-100 bg-background pt-4">
+          {nav.map((item) => (
+            <NavbarMenuItem key={item.href}>
+              <Link
+                href={item.href}
+                size="lg"
+                className="w-full text-default-600"
+                onPress={() => setIsMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            </NavbarMenuItem>
+          ))}
+          <NavbarMenuItem>
+            <Button
+              fullWidth
+              color="primary"
+              radius="full"
+              className="mt-2"
+              isLoading={busy || isConnecting}
+              onPress={() => void enterTrade()}
             >
-              {item.label}
-            </Link>
+              {isConnected ? "Open dashboard" : "Connect & trade"}
+            </Button>
           </NavbarMenuItem>
-        ))}
-        <NavbarMenuItem>
-          <Button
-            as={NextLink}
-            href="/trade"
-            fullWidth
-            color="primary"
-            radius="full"
-            className="mt-2"
-          >
-            Start trading
-          </Button>
-        </NavbarMenuItem>
-      </NavbarMenu>
-    </Navbar>
+        </NavbarMenu>
+      </Navbar>
+
+      {error && (
+        <div className="border-t border-danger/20 bg-danger/10">
+          <div className="mx-auto flex max-w-[var(--tape-max)] items-center justify-between gap-3 px-4 py-2 md:px-6 lg:px-8">
+            <p className="min-w-0 text-tiny text-danger">{error}</p>
+            <Button
+              size="sm"
+              variant="light"
+              color="danger"
+              className="shrink-0"
+              onPress={clearError}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+    </header>
   );
 }

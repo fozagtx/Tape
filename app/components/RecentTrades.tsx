@@ -1,90 +1,15 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Chip, Skeleton } from "@heroui/react";
-import type { EventLog } from "ethers";
-import { useWallet } from "./WalletProvider";
+import { useMarket } from "./MarketProvider";
 import Panel from "./ui/panel";
 import ListHeader from "./ui/list-header";
 import EmptyState from "./ui/empty-state";
 
-interface TradeEvent {
-  price: number;
-  quantity: number;
-  buyId: string;
-  sellId: string;
-  key: string;
-}
-
 export default function RecentTrades() {
-  const { contract } = useWallet();
-  const [trades, setTrades] = useState<TradeEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!contract) return;
-    let cancelled = false;
-
-    const filter = contract.filters.OrderMatched();
-    contract
-      .queryFilter(filter, -1000)
-      .then((events) => {
-        if (cancelled) return;
-        const parsed = events
-          .map((ev, idx) => {
-            const e = ev as EventLog;
-            const buyId = String(e.args?.buyId ?? 0);
-            const sellId = String(e.args?.sellId ?? 0);
-            return {
-              price: Number(e.args?.price || 0) / 1e9,
-              quantity: Number(e.args?.quantity || 0),
-              buyId,
-              sellId,
-              key: `${e.transactionHash ?? idx}-${buyId}-${sellId}`,
-            };
-          })
-          .reverse()
-          .slice(0, 30);
-        setTrades(parsed);
-        setLoading(false);
-        setError(null);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError("Could not load trades.");
-          setLoading(false);
-        }
-      });
-
-    const onMatch = (
-      buyId: bigint,
-      sellId: bigint,
-      _buyer: string,
-      _seller: string,
-      price: bigint,
-      qty: bigint
-    ) => {
-      setTrades((prev) =>
-        [
-          {
-            price: Number(price) / 1e9,
-            quantity: Number(qty),
-            buyId: String(buyId),
-            sellId: String(sellId),
-            key: `${Date.now()}-${buyId}-${sellId}`,
-          },
-          ...prev,
-        ].slice(0, 30)
-      );
-    };
-
-    contract.on("OrderMatched", onMatch);
-    return () => {
-      cancelled = true;
-      contract.off("OrderMatched", onMatch);
-    };
-  }, [contract]);
+  const { ready, live, error, trades } = useMarket();
+  const loading = !ready;
 
   return (
     <Panel
@@ -92,8 +17,8 @@ export default function RecentTrades() {
       className="min-h-72"
       title="Recent trades"
       endContent={
-        <Chip size="sm" variant="flat">
-          {loading ? "…" : `${trades.length} shown`}
+        <Chip size="sm" variant="flat" color={live ? "success" : "default"}>
+          {loading ? "…" : live ? `${trades.length} live` : `${trades.length}`}
         </Chip>
       }
     >
@@ -115,20 +40,23 @@ export default function RecentTrades() {
           </div>
         )}
 
-        {!loading && error && (
-          <EmptyState icon="solar:danger-triangle-linear" title={error} />
+        {!loading && error && trades.length === 0 && (
+          <EmptyState
+            icon="solar:danger-triangle-linear"
+            title="Trades offline"
+            description={error}
+          />
         )}
 
         {!loading && !error && trades.length === 0 && (
           <EmptyState
             icon="solar:list-linear"
             title="No fills yet"
-            description="When a buy and sell cross, the match prints here."
+            description="Matches appear here in real time when orders cross."
           />
         )}
 
         {!loading &&
-          !error &&
           trades.map((t) => (
             <div
               key={t.key}

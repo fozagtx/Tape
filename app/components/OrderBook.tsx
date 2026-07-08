@@ -1,17 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Chip, Skeleton, cn } from "@heroui/react";
-import { useWallet } from "./WalletProvider";
+import { useMarket } from "./MarketProvider";
 import Panel from "./ui/panel";
 import ListHeader from "./ui/list-header";
 import EmptyState from "./ui/empty-state";
-
-interface BookEntry {
-  price: number;
-  quantity: number;
-  total: number;
-}
+import type { BookEntry } from "../hooks/useMarketLive";
 
 const OrderRow = React.forwardRef<
   HTMLDivElement,
@@ -53,52 +48,7 @@ const OrderRow = React.forwardRef<
 OrderRow.displayName = "OrderRow";
 
 export default function OrderBook() {
-  const { contract } = useWallet();
-  const [bids, setBids] = useState<BookEntry[]>([]);
-  const [asks, setAsks] = useState<BookEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!contract) return;
-    let cancelled = false;
-
-    const fetchBook = async () => {
-      try {
-        const [bidData, askData] = await Promise.all([
-          contract.getBookSide(true, 15),
-          contract.getBookSide(false, 15),
-        ]);
-        const formatSide = (prices: bigint[], qtys: bigint[]) => {
-          let running = 0;
-          return prices.map((p, i) => {
-            const price = Number(p) / 1e9;
-            const qty = Number(qtys[i]);
-            running += price * qty;
-            return { price, quantity: qty, total: running };
-          });
-        };
-        if (!cancelled) {
-          setBids(formatSide(bidData[0], bidData[1]));
-          setAsks(formatSide(askData[0], askData[1]));
-          setLoading(false);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) {
-          setError("Failed to load order book.");
-          setLoading(false);
-        }
-      }
-    };
-
-    void fetchBook();
-    const iv = setInterval(fetchBook, 2000);
-    return () => {
-      cancelled = true;
-      clearInterval(iv);
-    };
-  }, [contract]);
+  const { ready, live, error, bids, asks } = useMarket();
 
   const maxTotal = useMemo(() => {
     const mb = bids[bids.length - 1]?.total || 0;
@@ -113,7 +63,8 @@ export default function OrderBook() {
     return { value: v, pct };
   }, [asks, bids]);
 
-  const empty = !loading && bids.length === 0 && asks.length === 0;
+  const empty = ready && !error && bids.length === 0 && asks.length === 0;
+  const loading = !ready;
 
   return (
     <Panel
@@ -123,17 +74,17 @@ export default function OrderBook() {
         <Chip
           size="sm"
           variant="flat"
-          color={error ? "danger" : "success"}
+          color={error ? "danger" : live ? "success" : "default"}
           startContent={
             <span
               className={cn(
                 "mx-0.5 h-1.5 w-1.5 rounded-full",
-                error ? "bg-danger" : "bg-success"
+                error ? "bg-danger" : live ? "bg-success" : "bg-default-400"
               )}
             />
           }
         >
-          {error ? "Error" : "Live"}
+          {error ? "Offline" : live ? "Live" : "…"}
         </Chip>
       }
     >
@@ -157,8 +108,8 @@ export default function OrderBook() {
       {!loading && error && (
         <EmptyState
           icon="solar:danger-triangle-linear"
-          title={error}
-          description="Auto-retry every 2s"
+          title="Book offline"
+          description={error}
         />
       )}
 
@@ -186,7 +137,7 @@ export default function OrderBook() {
                 Best bid
               </p>
               <p className="truncate font-mono text-small font-semibold tabular-nums text-success">
-                {bids[0]?.price.toFixed(4) ?? "—"}
+                {bids[0]?.price.toFixed(4) ?? "-"}
               </p>
             </div>
             <div className="min-w-0 text-center">
@@ -196,7 +147,7 @@ export default function OrderBook() {
               <p className="truncate font-mono text-tiny tabular-nums text-default-500">
                 {spread
                   ? `${spread.value.toFixed(4)} (${spread.pct.toFixed(2)}%)`
-                  : "—"}
+                  : "-"}
               </p>
             </div>
             <div className="min-w-0 text-right">
@@ -204,7 +155,7 @@ export default function OrderBook() {
                 Best ask
               </p>
               <p className="truncate font-mono text-small font-semibold tabular-nums text-danger">
-                {asks[0]?.price.toFixed(4) ?? "—"}
+                {asks[0]?.price.toFixed(4) ?? "-"}
               </p>
             </div>
           </div>
@@ -229,7 +180,7 @@ export default function OrderBook() {
             <EmptyState
               icon="solar:book-linear"
               title="Book is empty"
-              description="Place a limit order from the trade panel. Depth appears after the transaction confirms."
+              description="Place a limit order. Depth updates live after the tx confirms."
             />
           )}
         </>

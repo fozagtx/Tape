@@ -32,8 +32,8 @@ export const CHAIN_CONFIG = {
   chainId: 968,
   chainIdHex: "0x3C8",
   explorerUrl: "https://scan.bohr.life",
-  /** Deployed TapeOrderBook — update after `npm run deploy:testnet` */
-  contractAddress: "0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8",
+  /** Live TapeOrderBook on BOT Chain Testnet */
+  contractAddress: "0x55Fa3C86C38FEE7F3587D883D6300d3243507CF0",
   blockTime: 750,
 } as const;
 

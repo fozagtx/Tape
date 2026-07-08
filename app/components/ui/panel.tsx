@@ -7,7 +7,7 @@ export type PanelProps = React.ComponentProps<typeof Card> & {
   title?: React.ReactNode;
   endContent?: React.ReactNode;
   bodyClassName?: string;
-  /** No body padding — for dense lists / order book */
+  /** No body padding - for dense lists / order book */
   flush?: boolean;
 };
 

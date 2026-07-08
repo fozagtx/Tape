@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tape — On-Chain Limit Order Book",
+  title: "Tape | On-chain limit order book",
   description:
-    "Fully on-chain limit order book on BOT Chain Testnet. Place, match, and cancel with sub-second blocks.",
+    "Fully on-chain limit order book. Place, match, and cancel as confirmed transactions.",
   icons: { icon: "/favicon.ico" },
 };
 

@@ -34,12 +34,13 @@ interface WalletContextType {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
-  /** Always CHAIN_CONFIG.contractAddress — for reads or writes. */
+  /** Always CHAIN_CONFIG.contractAddress - for reads or writes. */
   contract: ethers.Contract;
   contractAddress: string;
   error: string | null;
   hasWallet: boolean;
-  connect: () => Promise<void>;
+  /** Resolves true when wallet is connected and ready. */
+  connect: () => Promise<boolean>;
   disconnect: () => void;
   switchChain: () => Promise<void>;
   clearError: () => void;
@@ -71,7 +72,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     hasWallet: true,
   });
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (): Promise<boolean> => {
     if (
       typeof window === "undefined" ||
       !(window as unknown as Record<string, unknown>).ethereum
@@ -81,7 +82,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         error: "No wallet found. Install MetaMask or another Web3 wallet.",
         hasWallet: false,
       }));
-      return;
+      return false;
     }
 
     setState((s) => ({
@@ -103,7 +104,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
           isConnecting: false,
           error: "No account selected in wallet.",
         }));
-        return;
+        return false;
       }
       const signer = await provider.getSigner();
       const network = await provider.getNetwork();
@@ -127,6 +128,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         error: null,
         hasWallet: true,
       });
+      return true;
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to connect wallet";
@@ -138,6 +140,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         isConnecting: false,
         error: friendly,
       }));
+      return false;
     }
   }, []);
 

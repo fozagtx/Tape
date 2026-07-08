@@ -3,7 +3,7 @@
 import React from "react";
 import { cn } from "@heroui/react";
 
-/** design-promax cell-wrapper — content2 surface row */
+/** design-promax cell-wrapper - content2 surface row */
 const CellWrapper = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
