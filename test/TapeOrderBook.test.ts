@@ -14,10 +14,10 @@ describe("TapeOrderBook", function () {
     it("should deploy with zero state", async () => {
       const { book } = await deployFixture();
       const [total, bids, asks, matches] = await book.stats();
-      expect(total).to.equal(0n);
-      expect(bids).to.equal(0n);
-      expect(asks).to.equal(0n);
-      expect(matches).to.equal(0n);
+      expect(total).to.equal(BigInt(0));
+      expect(bids).to.equal(BigInt(0));
+      expect(asks).to.equal(BigInt(0));
+      expect(matches).to.equal(BigInt(0));
     });
   });
 

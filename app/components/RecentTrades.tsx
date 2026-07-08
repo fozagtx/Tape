@@ -20,8 +20,8 @@ export default function RecentTrades() {
         return {
           price: Number(e.args?.price || 0) / 1e9,
           quantity: Number(e.args?.quantity || 0),
-          buyId: e.args?.buyId || 0n,
-          sellId: e.args?.sellId || 0n,
+          buyId: e.args?.buyId || BigInt(0),
+          sellId: e.args?.sellId || BigInt(0),
           timestamp: Date.now(),
         };
       });
