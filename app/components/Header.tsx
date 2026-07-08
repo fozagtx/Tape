@@ -16,6 +16,7 @@ import {
   cn,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
+import NextLink from "next/link";
 import { useWallet } from "./WalletProvider";
 import { CHAIN_CONFIG } from "@/lib/config";
 
@@ -52,7 +53,11 @@ export default function Header() {
           wrapper: "w-full max-w-[var(--tape-max)] px-4 md:px-6 lg:px-8",
         }}
       >
-        <NavbarBrand className="min-w-0 gap-3">
+        <NavbarBrand
+          as={NextLink}
+          href="/"
+          className="min-w-0 gap-3"
+        >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
             <span className="font-mono text-small font-bold">T</span>
           </div>
@@ -85,6 +90,16 @@ export default function Header() {
         </NavbarBrand>
 
         <NavbarContent justify="end" className="gap-2">
+          <NavbarItem className="hidden md:flex">
+            <Link
+              as={NextLink}
+              href="/"
+              className="text-tiny text-default-500"
+              size="sm"
+            >
+              Home
+            </Link>
+          </NavbarItem>
           <NavbarItem className="hidden lg:flex">
             <Link
               isExternal

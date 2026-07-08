@@ -35,8 +35,9 @@ PRIVATE_KEY=0xYOUR_KEY npx hardhat run scripts/deploy.ts --network botchain-test
 ```
 tape/
 ├── app/                    # Next.js 16 App Router
-│   ├── layout.tsx          # Root layout + WalletProvider
-│   ├── page.tsx            # Main trading page
+│   ├── page.tsx            # Landing (goal + product story)
+│   ├── trade/page.tsx      # Trading terminal
+│   ├── layout.tsx          # Root layout + providers
 │   ├── globals.css         # Global styles + Tailwind v4
 │   └── components/         # UI components
 ├── lib/                    # Config, ABI, bytecode
@@ -52,7 +53,10 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The book loads from the configured contract over RPC; connect a wallet only to place or cancel orders.
+- Landing: [http://localhost:3000](http://localhost:3000)
+- Trade: [http://localhost:3000/trade](http://localhost:3000/trade)
+
+The book loads from the configured contract over RPC; connect a wallet only to place or cancel orders.
 
 ## Features
 
