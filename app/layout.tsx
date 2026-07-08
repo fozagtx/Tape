@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Tape — On-Chain Limit Order Book",
   description:
-    "Fully on-chain limit order book powered by BOT Chain. 0.75s blocks, near-zero fees, sub-second finality.",
+    "Fully on-chain limit order book on BOT Chain Testnet. Place, match, and cancel with sub-second blocks.",
   icons: { icon: "/favicon.ico" },
 };
 
@@ -30,10 +30,9 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="flex min-h-full flex-col">
         <WalletProvider>{children}</WalletProvider>
       </body>
     </html>
   );
 }
-

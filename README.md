@@ -23,8 +23,8 @@ here (`0xFFFC…5cA8`) was an empty stub with no order-book logic — it has bee
 Deploy the real `TapeOrderBook` one of two ways:
 
 1. **From the UI (recommended):** click **Connect Wallet**, switch to BOT Chain,
-   then use the **Deploy New Contract** button on the home screen. The deployed
-   address is saved to `localStorage` and the order book goes live immediately.
+   then use the **Deploy New Contract** button on the home screen. The order
+   book goes live for the current session.
 2. **Via Hardhat** (needs a funded deployer key on BOT Chain testnet):
    ```bash
    npx hardhat compile
@@ -70,10 +70,12 @@ npx hardhat run scripts/deploy.ts --network botchain-testnet
 ## Features
 
 - **Live Order Book** — On-chain depth, polled every 2s via `getBookSide`
+- **Price chart** — SVG line built only from real `OrderMatched` fills (no mock series)
 - **Limit Orders** — Buy/sell with price (gwei) & quantity, matched on-chain
 - **Recent Trades** — Real-time `OrderMatched` event tape
-- **My Orders** — Open orders with on-chain cancel
-- **Wallet Connect** — MetaMask + BOT Chain network switching
-- **In-Browser Deploy** — Deploy the real contract from the UI (no CLI needed)
-- **Responsive** — Mobile-first design
+- **My Orders** — Open orders with on-chain cancel + error feedback
+- **Wallet Connect** — MetaMask + BOT Chain Testnet add/switch
+- **In-Browser Deploy** — Deploy or load the real contract from the UI (session only)
+- **Honest empty states** — Clear next actions when book/trades/orders are empty
+- **Responsive** — Mobile-first trading layout
 

@@ -1,85 +1,154 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useWallet } from "./WalletProvider";
 import type { EventLog } from "ethers";
 
-interface TradeEvent { price: number; quantity: number; buyId: bigint; sellId: bigint; timestamp: number; }
+interface TradeEvent {
+  price: number;
+  quantity: number;
+  buyId: string;
+  sellId: string;
+  key: string;
+}
+
+function formatMatch(buyId: string, sellId: string) {
+  return `#${buyId}×#${sellId}`;
+}
 
 export default function RecentTrades() {
   const { contract } = useWallet();
   const [trades, setTrades] = useState<TradeEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!contract) return;
-    const filter = contract.filters.OrderMatched();
-    contract.queryFilter(filter, -1000).then((events) => {
-      const parsed = events.map((ev) => {
-        const e = ev as EventLog;
-        return {
-          price: Number(e.args?.price || 0) / 1e9,
-          quantity: Number(e.args?.quantity || 0),
-          buyId: e.args?.buyId || BigInt(0),
-          sellId: e.args?.sellId || BigInt(0),
-          timestamp: Date.now(),
-        };
-      });
-      setTrades(parsed.reverse().slice(0, 20));
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    let cancelled = false;
 
-    const onMatch = (buyId: bigint, sellId: bigint, _buyer: string, _seller: string, price: bigint, qty: bigint) => {
-      setTrades((prev) => [{
-        price: Number(price) / 1e9,
-        quantity: Number(qty),
-        buyId, sellId,
-        timestamp: Date.now(),
-      }, ...prev.slice(0, 19)]);
+    const filter = contract.filters.OrderMatched();
+    contract
+      .queryFilter(filter, -1000)
+      .then((events) => {
+        if (cancelled) return;
+        const parsed = events
+          .map((ev, idx) => {
+            const e = ev as EventLog;
+            const buyId = String(e.args?.buyId ?? 0);
+            const sellId = String(e.args?.sellId ?? 0);
+            return {
+              price: Number(e.args?.price || 0) / 1e9,
+              quantity: Number(e.args?.quantity || 0),
+              buyId,
+              sellId,
+              key: `${e.transactionHash ?? idx}-${buyId}-${sellId}`,
+            };
+          })
+          .reverse()
+          .slice(0, 30);
+        setTrades(parsed);
+        setLoading(false);
+        setError(null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Could not load trades.");
+          setLoading(false);
+        }
+      });
+
+    const onMatch = (
+      buyId: bigint,
+      sellId: bigint,
+      _buyer: string,
+      _seller: string,
+      price: bigint,
+      qty: bigint
+    ) => {
+      setTrades((prev) =>
+        [
+          {
+            price: Number(price) / 1e9,
+            quantity: Number(qty),
+            buyId: String(buyId),
+            sellId: String(sellId),
+            key: `${Date.now()}-${buyId}-${sellId}`,
+          },
+          ...prev,
+        ].slice(0, 30)
+      );
     };
+
     contract.on("OrderMatched", onMatch);
-    return () => { contract.off("OrderMatched", onMatch); };
+    return () => {
+      cancelled = true;
+      contract.off("OrderMatched", onMatch);
+    };
   }, [contract]);
 
-  if (!contract) {
-    return (
-      <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 text-center">
-        <h2 className="mb-2 text-xs font-bold tracking-wider text-white">RECENT TRADES</h2>
-        <p className="text-xs text-[var(--color-dim)]">Connect contract to view trades</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8">
-        <span className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-accent)]/30 border-t-[var(--color-accent)]" />
-        <p className="mt-2 text-[10px] text-[var(--color-dim)]">Loading trades...</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-card)]">
-      <div className="flex items-center justify-between border-b border-[var(--color-border)] px-4 py-3">
-        <h2 className="text-xs font-bold tracking-wider text-white">RECENT TRADES</h2>
-        <span className="text-[10px] text-[var(--color-dim)]">{trades.length} trades</span>
+    <div className="panel flex flex-col">
+      <div className="panel-header">
+        <h2 className="panel-title">Recent trades</h2>
+        <span className="text-[10px] text-[var(--color-dim)]">
+          {loading ? "…" : `${trades.length} shown`}
+        </span>
       </div>
-      <div className="grid grid-cols-3 px-4 py-2 text-[10px] font-medium text-[var(--color-dim)]">
-        <span>PRICE</span><span className="text-right">QTY</span><span className="text-right">MATCH</span>
+
+      <div className="grid grid-cols-3 px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-dim)]">
+        <span>Price</span>
+        <span className="text-right">Qty</span>
+        <span className="text-right">Match</span>
       </div>
-      <div className="max-h-[300px] overflow-y-auto">
-        {trades.length === 0 ? (
-          <div className="flex items-center justify-center py-8"><p className="text-xs text-[var(--color-dim)]">No trades yet</p></div>
-        ) : (
-          trades.slice(0, 15).map((t, i) => (
-            <div key={i} className="grid grid-cols-3 px-4 py-[5px] text-xs transition-colors hover:bg-white/[0.02]">
-              <span className="font-mono tabular-nums text-[var(--color-txt)]">{t.price.toFixed(4)}</span>
-              <span className="text-right font-mono tabular-nums text-[var(--color-txt)]">{t.quantity}</span>
-              <span className="text-right text-[var(--color-dim)]">#{t.buyId}×#{t.sellId}</span>
-            </div>
-          ))
+
+      <div className="max-h-[280px] overflow-y-auto">
+        {loading && (
+          <div className="space-y-1.5 px-3 py-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="skeleton h-4 w-full" />
+            ))}
+          </div>
         )}
+
+        {!loading && error && (
+          <div className="px-4 py-8 text-center">
+            <p className="text-xs text-[var(--color-red)]">{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && trades.length === 0 && (
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm font-medium text-[var(--color-muted)]">
+              No fills yet
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-[var(--color-dim)]">
+              When a buy and sell cross, the match prints here with the fill
+              price and size.
+            </p>
+          </div>
+        )}
+
+        {!loading &&
+          !error &&
+          trades.map((t) => (
+            <div
+              key={t.key}
+              className="grid grid-cols-3 px-3 py-[5px] text-xs hover:bg-white/[0.03]"
+            >
+              <span className="font-mono tabular-nums text-[var(--color-txt)]">
+                {t.price.toFixed(4)}
+              </span>
+              <span className="text-right font-mono tabular-nums text-[var(--color-txt)]">
+                {t.quantity}
+              </span>
+              <span
+                className="truncate text-right font-mono text-[10px] text-[var(--color-dim)]"
+                title={formatMatch(t.buyId, t.sellId)}
+              >
+                {formatMatch(t.buyId, t.sellId)}
+              </span>
+            </div>
+          ))}
       </div>
     </div>
   );

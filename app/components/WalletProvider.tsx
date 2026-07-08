@@ -1,6 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 import { ethers } from "ethers";
 import { CHAIN_CONFIG } from "@/lib/config";
 import { TAPE_ABI } from "@/lib/abi";
@@ -16,6 +22,7 @@ interface WalletState {
   contract: ethers.Contract | null;
   contractAddress: string | null;
   error: string | null;
+  hasWallet: boolean;
 }
 
 interface WalletContextType extends WalletState {
@@ -23,9 +30,28 @@ interface WalletContextType extends WalletState {
   disconnect: () => void;
   switchChain: () => Promise<void>;
   setContract: (address: string) => void;
+  clearContract: () => void;
+  clearError: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
+
+async function probeContract(
+  address: string,
+  provider: ethers.Provider,
+  signer: ethers.Signer | null
+): Promise<ethers.Contract | null> {
+  if (!ethers.isAddress(address)) return null;
+  const code = await provider.getCode(address);
+  if (code === "0x") return null;
+  const probe = new ethers.Contract(address, TAPE_ABI, provider);
+  try {
+    await probe.nextOrderId();
+  } catch {
+    return null;
+  }
+  return new ethers.Contract(address, TAPE_ABI, signer ?? provider);
+}
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<WalletState>({
@@ -39,43 +65,57 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     contract: null,
     contractAddress: null,
     error: null,
+    // Assume a wallet may exist; connect() corrects this if none is found.
+    hasWallet: true,
   });
 
   const connect = useCallback(async () => {
-    if (typeof window === "undefined" || !(window as unknown as Record<string, unknown>).ethereum) {
-      setState((s) => ({ ...s, error: "No wallet detected. Install MetaMask." }));
+    if (
+      typeof window === "undefined" ||
+      !(window as unknown as Record<string, unknown>).ethereum
+    ) {
+      setState((s) => ({
+        ...s,
+        error: "No wallet found. Install MetaMask or another Web3 wallet.",
+        hasWallet: false,
+      }));
       return;
     }
 
-    setState((s) => ({ ...s, isConnecting: true, error: null }));
+    setState((s) => ({
+      ...s,
+      isConnecting: true,
+      error: null,
+      hasWallet: true,
+    }));
 
     try {
-      const ethereum = (window as unknown as { ethereum: ethers.Eip1193Provider }).ethereum;
+      const ethereum = (
+        window as unknown as { ethereum: ethers.Eip1193Provider }
+      ).ethereum;
       const provider = new ethers.BrowserProvider(ethereum);
       const accounts = await provider.send("eth_requestAccounts", []);
+      if (!accounts?.length) {
+        setState((s) => ({
+          ...s,
+          isConnecting: false,
+          error: "No account selected in wallet.",
+        }));
+        return;
+      }
       const signer = await provider.getSigner();
       const network = await provider.getNetwork();
       const balance = await provider.getBalance(accounts[0]);
       const chainId = Number(network.chainId);
 
-      // Validate the configured address on-chain — getCode must be non-empty AND
-      // nextOrderId() must respond — so a stub/wrong/fake address is rejected
-      // instead of silently rendering empty data (which is what the old hardcoded
-      // stub address did).
       let contract: ethers.Contract | null = null;
       let contractAddress: string | null = null;
-      const candidate = (CHAIN_CONFIG.contractAddress || "").trim();
-      if (candidate && ethers.isAddress(candidate)) {
-        const code = await provider.getCode(candidate);
-        if (code !== "0x") {
-          const probe = new ethers.Contract(candidate, TAPE_ABI, provider);
-          try {
-            await probe.nextOrderId();
-            contract = new ethers.Contract(candidate, TAPE_ABI, signer);
-            contractAddress = candidate;
-          } catch {
-            // Address has code but is NOT a TapeOrderBook (e.g. the old stub).
-          }
+      const configured = (CHAIN_CONFIG.contractAddress || "").trim();
+      if (configured) {
+        const c = await probeContract(configured, provider, signer);
+        if (c) {
+          contract = c;
+          contractAddress = configured;
         }
       }
 
@@ -90,15 +130,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         contract,
         contractAddress,
         error: null,
+        hasWallet: true,
       });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to connect wallet";
-      setState((s) => ({ ...s, isConnecting: false, error: msg }));
+      const msg =
+        err instanceof Error ? err.message : "Failed to connect wallet";
+      const friendly = msg.includes("user rejected")
+        ? "Connection rejected in wallet."
+        : msg;
+      setState((s) => ({
+        ...s,
+        isConnecting: false,
+        error: friendly,
+      }));
     }
   }, []);
 
   const disconnect = useCallback(() => {
-    setState({
+    setState((s) => ({
       address: null,
       balance: "0",
       chainId: null,
@@ -109,41 +158,112 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       contract: null,
       contractAddress: null,
       error: null,
-    });
+      hasWallet: s.hasWallet,
+    }));
   }, []);
 
   const switchChain = useCallback(async () => {
-    if (typeof window === "undefined" || !(window as unknown as Record<string, unknown>).ethereum) return;
+    if (
+      typeof window === "undefined" ||
+      !(window as unknown as Record<string, unknown>).ethereum
+    ) {
+      setState((s) => ({
+        ...s,
+        error: "No wallet found. Install MetaMask first.",
+      }));
+      return;
+    }
     try {
-      const ethereum = (window as unknown as { ethereum: ethers.Eip1193Provider }).ethereum;
-      await ethereum.request({
-        method: "wallet_addEthereumChain",
-        params: [{
-          chainId: CHAIN_CONFIG.chainIdHex,
-          chainName: "BOT Chain Testnet",
-          rpcUrls: [CHAIN_CONFIG.rpcUrl],
-          blockExplorerUrls: [CHAIN_CONFIG.explorerUrl],
-          nativeCurrency: { name: "BOT", symbol: "BOT", decimals: 18 },
-        }],
-      });
+      const ethereum = (
+        window as unknown as { ethereum: ethers.Eip1193Provider }
+      ).ethereum;
+      try {
+        await ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: CHAIN_CONFIG.chainIdHex }],
+        });
+      } catch (switchErr: unknown) {
+        const code = (switchErr as { code?: number })?.code;
+        if (code === 4902) {
+          await ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: CHAIN_CONFIG.chainIdHex,
+                chainName: "BOT Chain Testnet",
+                rpcUrls: [CHAIN_CONFIG.rpcUrl],
+                blockExplorerUrls: [CHAIN_CONFIG.explorerUrl],
+                nativeCurrency: {
+                  name: "BOT",
+                  symbol: "BOT",
+                  decimals: 18,
+                },
+              },
+            ],
+          });
+        } else {
+          throw switchErr;
+        }
+      }
       await connect();
     } catch {
-      setState((s) => ({ ...s, error: "Failed to switch chain" }));
+      setState((s) => ({
+        ...s,
+        error: "Could not switch network. Add BOT Chain Testnet manually.",
+      }));
     }
   }, [connect]);
 
-  const setContract = useCallback((address: string) => {
-    if (!state.signer) return;
-    const contract = new ethers.Contract(address, TAPE_ABI, state.signer);
-    setState((s) => ({ ...s, contract, contractAddress: address }));
-  }, [state.signer]);
+  const setContract = useCallback(
+    (address: string) => {
+      if (!state.signer) return;
+      const contract = new ethers.Contract(address, TAPE_ABI, state.signer);
+      setState((s) => ({
+        ...s,
+        contract,
+        contractAddress: address,
+        error: null,
+      }));
+    },
+    [state.signer]
+  );
+
+  const clearContract = useCallback(() => {
+    setState((s) => ({
+      ...s,
+      contract: null,
+      contractAddress: null,
+    }));
+  }, []);
+
+  const clearError = useCallback(() => {
+    setState((s) => ({ ...s, error: null }));
+  }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined" || !(window as unknown as Record<string, unknown>).ethereum) return;
-    const ethereum = (window as unknown as { ethereum: ethers.Eip1193Provider & { on?: (event: string, cb: () => void) => void; removeListener?: (event: string, cb: () => void) => void } }).ethereum;
+    if (
+      typeof window === "undefined" ||
+      !(window as unknown as Record<string, unknown>).ethereum
+    )
+      return;
+    const ethereum = (
+      window as unknown as {
+        ethereum: ethers.Eip1193Provider & {
+          on?: (event: string, cb: (...args: unknown[]) => void) => void;
+          removeListener?: (
+            event: string,
+            cb: (...args: unknown[]) => void
+          ) => void;
+        };
+      }
+    ).ethereum;
 
-    const handleAccountsChanged = () => { if (state.isConnected) connect(); };
-    const handleChainChanged = () => { if (state.isConnected) connect(); };
+    const handleAccountsChanged = () => {
+      if (state.isConnected) connect();
+    };
+    const handleChainChanged = () => {
+      if (state.isConnected) connect();
+    };
 
     ethereum.on?.("accountsChanged", handleAccountsChanged);
     ethereum.on?.("chainChanged", handleChainChanged);
@@ -155,7 +275,17 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, [connect, state.isConnected]);
 
   return (
-    <WalletContext.Provider value={{ ...state, connect, disconnect, switchChain, setContract }}>
+    <WalletContext.Provider
+      value={{
+        ...state,
+        connect,
+        disconnect,
+        switchChain,
+        setContract,
+        clearContract,
+        clearError,
+      }}
+    >
       {children}
     </WalletContext.Provider>
   );

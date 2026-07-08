@@ -8,7 +8,17 @@ import { CHAIN_CONFIG } from "@/lib/config";
 import { TAPE_BYTECODE } from "@/lib/bytecode";
 
 export default function DeployContract() {
-  const { isConnected, signer, setContract, chainId, contractAddress, provider } = useWallet();
+  const {
+    isConnected,
+    signer,
+    setContract,
+    chainId,
+    connect,
+    switchChain,
+    isConnecting,
+    provider,
+    hasWallet,
+  } = useWallet();
   const [isDeploying, setIsDeploying] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,95 +27,261 @@ export default function DeployContract() {
   const isCorrectChain = chainId === CHAIN_CONFIG.chainId;
 
   const handleDeploy = async () => {
-    if (!signer) { setError("Connect wallet first"); return; }
-    if (!isCorrectChain) { setError("Switch to BOT Chain first"); return; }
-    setIsDeploying(true); setError(null);
+    if (!signer) {
+      setError("Connect your wallet first.");
+      return;
+    }
+    if (!isCorrectChain) {
+      setError("Switch to BOT Chain Testnet first.");
+      return;
+    }
+    setIsDeploying(true);
+    setError(null);
     try {
-      const factory = new ethers.ContractFactory(TAPE_ABI, TAPE_BYTECODE, signer);
+      const factory = new ethers.ContractFactory(
+        TAPE_ABI,
+        TAPE_BYTECODE,
+        signer
+      );
       const contract = await factory.deploy();
       await contract.waitForDeployment();
       setContract(await contract.getAddress());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Deployment failed");
+      const msg = err instanceof Error ? err.message : "Deployment failed";
+      setError(
+        msg.includes("user rejected")
+          ? "You rejected the deployment in your wallet."
+          : msg.length > 160
+            ? msg.slice(0, 160) + "…"
+            : msg
+      );
     } finally {
       setIsDeploying(false);
     }
   };
 
   const handleLoad = async () => {
-    if (!ethers.isAddress(contractInput)) { setError("Enter a valid address"); return; }
-    if (!provider) { setError("Wallet not connected"); return; }
-    setIsValidating(true); setError(null);
+    const addr = contractInput.trim();
+    if (!ethers.isAddress(addr)) {
+      setError("Enter a valid contract address (0x…).");
+      return;
+    }
+    if (!provider) {
+      setError("Connect your wallet first.");
+      return;
+    }
+    setIsValidating(true);
+    setError(null);
     try {
-      const code = await provider.getCode(contractInput);
-      if (code === "0x") { setError("No contract at that address"); return; }
-      const probe = new ethers.Contract(contractInput, TAPE_ABI, provider);
+      const code = await provider.getCode(addr);
+      if (code === "0x") {
+        setError("No contract found at that address on this network.");
+        return;
+      }
+      const probe = new ethers.Contract(addr, TAPE_ABI, provider);
       await probe.nextOrderId();
-      setContract(contractInput);
+      setContract(addr);
     } catch {
-      setError("Address is not a TapeOrderBook contract");
+      setError(
+        "That address is not a TapeOrderBook contract on BOT Chain Testnet."
+      );
     } finally {
       setIsValidating(false);
     }
   };
 
+  // ── Not connected ──────────────────────────────────────
   if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-8 text-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-dim)" strokeWidth="1.5" className="mb-4">
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <path d="M22 10H2" />
-          <circle cx="18" cy="15" r="1.5" />
-        </svg>
-        <h3 className="mb-2 text-lg font-bold text-white">Connect Wallet</h3>
-        <p className="text-sm text-[var(--color-dim)]">Connect your wallet to interact with BOT Chain</p>
+      <div className="panel animate-fade-in p-6 sm:p-8">
+        <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-elevated)]">
+          <span className="font-mono text-lg font-bold text-[var(--color-accent)]">
+            T
+          </span>
+        </div>
+        <h2 className="mb-1.5 text-lg font-semibold text-[var(--color-white)]">
+          Get started with Tape
+        </h2>
+        <p className="mb-6 text-sm leading-relaxed text-[var(--color-muted)]">
+          Tape is a fully on-chain limit order book on BOT Chain. Connect a
+          wallet to deploy or load the order book and start trading.
+        </p>
+        <ul className="mb-6 space-y-2 text-xs text-[var(--color-muted)]">
+          <li className="flex gap-2">
+            <span className="text-[var(--color-accent)]">1.</span>
+            Connect MetaMask (or any EVM wallet)
+          </li>
+          <li className="flex gap-2">
+            <span className="text-[var(--color-accent)]">2.</span>
+            Switch to BOT Chain Testnet
+          </li>
+          <li className="flex gap-2">
+            <span className="text-[var(--color-accent)]">3.</span>
+            Deploy a new book or paste an existing address
+          </li>
+        </ul>
+        <button
+          type="button"
+          onClick={connect}
+          disabled={isConnecting}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-[#0c0d10] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isConnecting
+            ? "Connecting…"
+            : hasWallet === false
+              ? "Install MetaMask"
+              : "Connect wallet"}
+        </button>
+        {hasWallet === false && (
+          <p className="mt-3 text-center text-xs text-[var(--color-dim)]">
+            <a
+              href="https://metamask.io/download/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+            >
+              Download MetaMask
+            </a>{" "}
+            then refresh this page.
+          </p>
+        )}
       </div>
     );
   }
 
+  // ── Wrong network ──────────────────────────────────────
   if (!isCorrectChain) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-card)] p-8 text-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-red)" strokeWidth="1.5" className="mb-4">
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 8v4M12 16h.01" />
-        </svg>
-        <h3 className="mb-2 text-lg font-bold text-[var(--color-red)]">Wrong Network</h3>
-        <p className="mb-4 text-sm text-[var(--color-dim)]">Switch to BOT Chain to continue</p>
+      <div className="panel animate-fade-in p-6 sm:p-8">
+        <div className="mb-4 inline-flex rounded-md border border-[var(--color-red)]/30 bg-[var(--color-red-dim)] px-2.5 py-1 text-xs font-medium text-[var(--color-red)]">
+          Wrong network
+        </div>
+        <h2 className="mb-1.5 text-lg font-semibold text-[var(--color-white)]">
+          Switch to BOT Chain Testnet
+        </h2>
+        <p className="mb-2 text-sm leading-relaxed text-[var(--color-muted)]">
+          Tape runs on BOT Chain Testnet (chain ID{" "}
+          <span className="font-mono text-[var(--color-txt)]">
+            {CHAIN_CONFIG.chainId}
+          </span>
+          ). Your wallet is on a different network.
+        </p>
+        <p className="mb-6 text-xs text-[var(--color-dim)]">
+          RPC: {CHAIN_CONFIG.rpcUrl}
+        </p>
+        <button
+          type="button"
+          onClick={switchChain}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-md bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-[#0c0d10] transition-opacity hover:opacity-90"
+        >
+          Switch to BOT Chain Testnet
+        </button>
       </div>
     );
   }
 
-  if (contractAddress) {
-    return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-[var(--color-green)]/30 bg-[var(--color-card)] p-8 text-center">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-green)" strokeWidth="1.5" className="mb-4">
-          <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
-          <path d="M22 4L12 14.01l-3-3" />
-        </svg>
-        <h3 className="mb-2 text-lg font-bold text-[var(--color-green)]">Contract Connected</h3>
-        <p className="font-mono text-xs text-[var(--color-txt)]">{contractAddress}</p>
-      </div>
-    );
-  }
-
+  // ── Setup ──────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6">
-      <h3 className="text-lg font-bold text-white">Setup TapeOrderBook</h3>
-      <button onClick={handleDeploy} disabled={isDeploying} className="w-full rounded-lg bg-[var(--color-accent)] py-3 text-sm font-bold text-white transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50">
-        {isDeploying ? <span className="flex items-center justify-center gap-2"><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />Deploying...</span> : "Deploy New Contract"}
+    <div className="panel animate-fade-in p-6 sm:p-8">
+      <h2 className="mb-1 text-lg font-semibold text-[var(--color-white)]">
+        Set up order book
+      </h2>
+      <p className="mb-6 text-sm leading-relaxed text-[var(--color-muted)]">
+        Deploy a fresh TapeOrderBook, or load one you already deployed on BOT
+        Chain Testnet.
+      </p>
+
+      <button
+        type="button"
+        onClick={handleDeploy}
+        disabled={isDeploying}
+        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md bg-[var(--color-accent)] px-4 py-2.5 text-sm font-semibold text-[#0c0d10] transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {isDeploying ? (
+          <>
+            <span
+              className="h-4 w-4 animate-spin rounded-full border-2 border-[#0c0d10]/30 border-t-[#0c0d10]"
+              aria-hidden
+            />
+            Confirm in wallet…
+          </>
+        ) : (
+          "Deploy new order book"
+        )}
       </button>
-      <div className="relative"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[var(--color-border)]" /></div><div className="relative flex justify-center"><span className="bg-[var(--color-card)] px-2 text-xs text-[var(--color-dim)]">OR</span></div></div>
+
+      <div className="relative my-5">
+        <div className="absolute inset-0 flex items-center" aria-hidden>
+          <div className="w-full border-t border-[var(--color-border)]" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-[var(--color-card)] px-3 text-[10px] font-medium uppercase tracking-wider text-[var(--color-dim)]">
+            or load existing
+          </span>
+        </div>
+      </div>
+
       <div>
-        <label className="mb-1 block text-xs font-medium text-[var(--color-dim)]">Existing contract Address</label>
+        <label
+          htmlFor="contract-address"
+          className="mb-1.5 block text-xs font-medium text-[var(--color-muted)]"
+        >
+          Contract address
+        </label>
         <div className="flex gap-2">
-          <input type="text" value={contractInput} onChange={(e) => setContractInput(e.target.value)} placeholder="0x..." className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-white outline-none font-mono focus:border-[var(--color-accent)]/50" />
-          <button onClick={handleLoad} disabled={isValidating} className="rounded-lg border border-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)]/10 disabled:opacity-50">
-            {isValidating ? "..." : "Load"}
+          <input
+            id="contract-address"
+            type="text"
+            value={contractInput}
+            onChange={(e) => setContractInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLoad();
+            }}
+            placeholder="0x…"
+            spellCheck={false}
+            autoComplete="off"
+            className="min-h-11 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 font-mono text-sm text-[var(--color-white)] outline-none transition-colors placeholder:text-[var(--color-dim)] focus:border-[var(--color-accent)]/60"
+          />
+          <button
+            type="button"
+            onClick={handleLoad}
+            disabled={isValidating || !contractInput.trim()}
+            className="inline-flex min-h-11 min-w-[5.5rem] items-center justify-center rounded-md border border-[var(--color-border-strong)] bg-[var(--color-elevated)] px-4 text-sm font-semibold text-[var(--color-white)] transition-colors hover:border-[var(--color-accent)]/40 hover:bg-[var(--color-accent-dim)] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {isValidating ? "Checking…" : "Load"}
           </button>
         </div>
       </div>
-      {error && <div className="rounded-lg bg-[var(--color-red)]/10 px-3 py-2 text-xs text-[var(--color-red)]">✕ {error}</div>}
+
+      {error && (
+        <div
+          role="alert"
+          className="mt-4 rounded-md border border-[var(--color-red)]/25 bg-[var(--color-red-dim)] px-3 py-2.5 text-xs leading-relaxed text-[var(--color-red)]"
+        >
+          {error}
+        </div>
+      )}
+
+      <p className="mt-5 text-[11px] leading-relaxed text-[var(--color-dim)]">
+        Need testnet BOT? Use the faucet linked from{" "}
+        <a
+          href="https://botchain.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+        >
+          botchain.ai
+        </a>
+        . Explorer:{" "}
+        <a
+          href={CHAIN_CONFIG.explorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[var(--color-accent)] underline-offset-2 hover:underline"
+        >
+          {new URL(CHAIN_CONFIG.explorerUrl).hostname}
+        </a>
+      </p>
     </div>
   );
 }
