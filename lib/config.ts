@@ -32,12 +32,8 @@ export const CHAIN_CONFIG = {
   chainId: 968,
   chainIdHex: "0x3C8",
   explorerUrl: "https://scan.bohr.life",
-  // No contract is shipped pre-deployed. The address previously hardcoded here
-  // (0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8) was an empty STUB with no
-  // order-book logic — every read returned zero/empty, which is why the UI
-  // looked like mock data. Deploy the real TapeOrderBook from the in-app
-  // Deploy panel (browser) or `npm run deploy:testnet` (Hardhat).
-  contractAddress: "" as string,
+  /** Deployed TapeOrderBook — update after `npm run deploy:testnet` */
+  contractAddress: "0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8",
   blockTime: 750,
 } as const;
 

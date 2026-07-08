@@ -6,6 +6,7 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useMemo,
 } from "react";
 import { ethers } from "ethers";
 import { CHAIN_CONFIG } from "@/lib/config";
@@ -19,41 +20,44 @@ interface WalletState {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
-  contract: ethers.Contract | null;
-  contractAddress: string | null;
+  /** Signer-bound contract when wallet is connected; otherwise null (read path used). */
+  writeContract: ethers.Contract | null;
   error: string | null;
   hasWallet: boolean;
 }
 
-interface WalletContextType extends WalletState {
+interface WalletContextType {
+  address: string | null;
+  balance: string;
+  chainId: number | null;
+  isConnected: boolean;
+  isConnecting: boolean;
+  provider: ethers.BrowserProvider | null;
+  signer: ethers.JsonRpcSigner | null;
+  /** Always CHAIN_CONFIG.contractAddress — for reads or writes. */
+  contract: ethers.Contract;
+  contractAddress: string;
+  error: string | null;
+  hasWallet: boolean;
   connect: () => Promise<void>;
   disconnect: () => void;
   switchChain: () => Promise<void>;
-  setContract: (address: string) => void;
-  clearContract: () => void;
   clearError: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
 
-async function probeContract(
-  address: string,
-  provider: ethers.Provider,
-  signer: ethers.Signer | null
-): Promise<ethers.Contract | null> {
-  if (!ethers.isAddress(address)) return null;
-  const code = await provider.getCode(address);
-  if (code === "0x") return null;
-  const probe = new ethers.Contract(address, TAPE_ABI, provider);
-  try {
-    await probe.nextOrderId();
-  } catch {
-    return null;
-  }
-  return new ethers.Contract(address, TAPE_ABI, signer ?? provider);
-}
+export const CONTRACT_ADDRESS = CHAIN_CONFIG.contractAddress;
+
+const readProvider = new ethers.JsonRpcProvider(CHAIN_CONFIG.rpcUrl);
+const readContract = new ethers.Contract(
+  CONTRACT_ADDRESS,
+  TAPE_ABI,
+  readProvider
+);
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+
   const [state, setState] = useState<WalletState>({
     address: null,
     balance: "0",
@@ -62,10 +66,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     isConnecting: false,
     provider: null,
     signer: null,
-    contract: null,
-    contractAddress: null,
+    writeContract: null,
     error: null,
-    // Assume a wallet may exist; connect() corrects this if none is found.
     hasWallet: true,
   });
 
@@ -107,17 +109,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const network = await provider.getNetwork();
       const balance = await provider.getBalance(accounts[0]);
       const chainId = Number(network.chainId);
-
-      let contract: ethers.Contract | null = null;
-      let contractAddress: string | null = null;
-      const configured = (CHAIN_CONFIG.contractAddress || "").trim();
-      if (configured) {
-        const c = await probeContract(configured, provider, signer);
-        if (c) {
-          contract = c;
-          contractAddress = configured;
-        }
-      }
+      const writeContract = new ethers.Contract(
+        CONTRACT_ADDRESS,
+        TAPE_ABI,
+        signer
+      );
 
       setState({
         address: accounts[0],
@@ -127,8 +123,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         isConnecting: false,
         provider,
         signer,
-        contract,
-        contractAddress,
+        writeContract,
         error: null,
         hasWallet: true,
       });
@@ -155,8 +150,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       isConnecting: false,
       provider: null,
       signer: null,
-      contract: null,
-      contractAddress: null,
+      writeContract: null,
       error: null,
       hasWallet: s.hasWallet,
     }));
@@ -214,28 +208,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [connect]);
 
-  const setContract = useCallback(
-    (address: string) => {
-      if (!state.signer) return;
-      const contract = new ethers.Contract(address, TAPE_ABI, state.signer);
-      setState((s) => ({
-        ...s,
-        contract,
-        contractAddress: address,
-        error: null,
-      }));
-    },
-    [state.signer]
-  );
-
-  const clearContract = useCallback(() => {
-    setState((s) => ({
-      ...s,
-      contract: null,
-      contractAddress: null,
-    }));
-  }, []);
-
   const clearError = useCallback(() => {
     setState((s) => ({ ...s, error: null }));
   }, []);
@@ -274,20 +246,29 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     };
   }, [connect, state.isConnected]);
 
+  const value = useMemo<WalletContextType>(
+    () => ({
+      address: state.address,
+      balance: state.balance,
+      chainId: state.chainId,
+      isConnected: state.isConnected,
+      isConnecting: state.isConnecting,
+      provider: state.provider,
+      signer: state.signer,
+      contract: state.writeContract ?? readContract,
+      contractAddress: CONTRACT_ADDRESS,
+      error: state.error,
+      hasWallet: state.hasWallet,
+      connect,
+      disconnect,
+      switchChain,
+      clearError,
+    }),
+    [state, connect, disconnect, switchChain, clearError]
+  );
+
   return (
-    <WalletContext.Provider
-      value={{
-        ...state,
-        connect,
-        disconnect,
-        switchChain,
-        setContract,
-        clearContract,
-        clearError,
-      }}
-    >
-      {children}
-    </WalletContext.Provider>
+    <WalletContext.Provider value={value}>{children}</WalletContext.Provider>
   );
 }
 

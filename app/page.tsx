@@ -1,5 +1,7 @@
 "use client";
 
+import React from "react";
+import { Link } from "@heroui/react";
 import Header from "./components/Header";
 import OrderBook from "./components/OrderBook";
 import TradeForm from "./components/TradeForm";
@@ -8,103 +10,90 @@ import RecentTrades from "./components/RecentTrades";
 import UserOrders from "./components/UserOrders";
 import PriceChart from "./components/PriceChart";
 import ChainInfo from "./components/ChainInfo";
-import DeployContract from "./components/DeployContract";
-import { useWallet } from "./components/WalletProvider";
 import { CHAIN_CONFIG } from "@/lib/config";
 
+/**
+ * Layout measures (4px grid + design-promax):
+ * - shell gutters: 16 / 24 / 32 via .tape-shell
+ * - section gap: gap-4 (16) · KPI uses gap-4 / lg:gap-5
+ * - panel pad: p-4 · headers: px-4 py-3
+ * - one mount per panel (no hidden duplicates)
+ *
+ * Breakpoints:
+ * - base: chart → trade → book → trades/orders → network
+ * - sm: trades | orders
+ * - lg: book 3 | center 6 | trade 3
+ */
 export default function Home() {
-  const { contract } = useWallet();
-
-  if (!contract) {
-    return (
-      <div className="flex min-h-screen flex-col bg-[var(--color-bg)]">
-        <Header />
-        <main className="flex flex-1 flex-col items-center justify-center px-4 py-10">
-          <div className="mb-8 max-w-md text-center">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-accent)]">
-              BOT Chain · On-chain CLOB
-            </p>
-            <h2 className="text-2xl font-semibold tracking-tight text-[var(--color-white)] sm:text-3xl">
-              Trade limits that settle every block
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed text-[var(--color-muted)]">
-              Every place, match, and cancel is a real transaction. No fake
-              depth, no off-chain matching theater.
-            </p>
-          </div>
-          <div className="w-full max-w-md">
-            <DeployContract />
-          </div>
-        </main>
-        <footer className="border-t border-[var(--color-border)] py-3 text-center text-[10px] text-[var(--color-dim)]">
-          Tape · BOT Chain Testnet (chain {CHAIN_CONFIG.chainId}) ·{" "}
-          <a
-            href="https://botchain.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[var(--color-muted)] hover:text-[var(--color-accent)]"
-          >
-            botchain.ai
-          </a>
-        </footer>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex min-h-screen flex-col bg-[var(--color-bg)]">
+    <div className="flex min-h-dvh flex-col bg-background">
       <Header />
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-2 py-3 sm:px-4 lg:px-6">
-        <div className="mb-3">
+
+      <main className="tape-shell flex-1 py-4 md:py-5 lg:py-6">
+        <div className="flex flex-col gap-4 lg:gap-5">
           <MarketStats />
-        </div>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
-          <div className="order-2 lg:order-1">
-            <OrderBook />
-          </div>
-          <div className="order-1 flex flex-col gap-3 lg:order-2">
-            <PriceChart />
-            <RecentTrades />
-            <UserOrders />
-          </div>
-          <div className="order-3 flex flex-col gap-3">
-            <TradeForm />
-            <ChainInfo />
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-start lg:gap-5">
+            <div className="order-3 lg:order-1 lg:col-span-3">
+              <OrderBook />
+            </div>
+
+            <div className="order-1 flex flex-col gap-4 lg:order-2 lg:col-span-6 lg:gap-5">
+              <PriceChart />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:gap-5">
+                <RecentTrades />
+                <UserOrders />
+              </div>
+            </div>
+
+            <div className="order-2 flex flex-col gap-4 lg:order-3 lg:col-span-3 lg:gap-5">
+              <TradeForm />
+              <ChainInfo />
+            </div>
           </div>
         </div>
       </main>
-      <footer className="border-t border-[var(--color-border)] bg-[var(--color-card)]">
-        <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-2 px-4 py-3 sm:flex-row lg:px-6">
+
+      <footer className="mt-auto border-t border-default-100 bg-content1 pb-[env(safe-area-inset-bottom)]">
+        <div className="tape-shell flex flex-col items-center justify-between gap-3 py-4 sm:flex-row">
           <div className="flex items-center gap-2">
             <span
-              className="h-1.5 w-1.5 rounded-full bg-[var(--color-green)] animate-pulse-dot"
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-success"
               aria-hidden
             />
-            <span className="text-[10px] text-[var(--color-dim)]">
+            <span className="text-center text-tiny text-default-400 sm:text-left">
               BOT Chain Testnet · {(CHAIN_CONFIG.blockTime / 1000).toFixed(2)}s
               blocks · chain {CHAIN_CONFIG.chainId}
             </span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] text-[var(--color-dim)]">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <span className="text-tiny text-default-400">
               Tape — on-chain order book
             </span>
-            <a
+            <Link
+              isExternal
+              href={`${CHAIN_CONFIG.explorerUrl}/address/${CHAIN_CONFIG.contractAddress}`}
+              className="text-tiny text-default-500"
+              size="sm"
+            >
+              Contract
+            </Link>
+            <Link
+              isExternal
               href={CHAIN_CONFIG.explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+              className="text-tiny text-default-500"
+              size="sm"
             >
               Explorer
-            </a>
-            <a
+            </Link>
+            <Link
+              isExternal
               href="https://botchain.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[10px] text-[var(--color-muted)] transition-colors hover:text-[var(--color-accent)]"
+              className="text-tiny text-default-500"
+              size="sm"
             >
               botchain.ai
-            </a>
+            </Link>
           </div>
         </div>
       </footer>

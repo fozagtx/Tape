@@ -1,7 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import { Chip, Skeleton, cn } from "@heroui/react";
 import { useWallet } from "./WalletProvider";
+import Panel from "./ui/panel";
+import ListHeader from "./ui/list-header";
+import EmptyState from "./ui/empty-state";
 
 interface BookEntry {
   price: number;
@@ -9,44 +13,44 @@ interface BookEntry {
   total: number;
 }
 
-function OrderRow({
-  entry,
-  maxTotal,
-  isBuy,
-}: {
-  entry: BookEntry;
-  maxTotal: number;
-  isBuy: boolean;
-}) {
+const OrderRow = React.forwardRef<
+  HTMLDivElement,
+  { entry: BookEntry; maxTotal: number; isBuy: boolean }
+>(({ entry, maxTotal, isBuy }, ref) => {
   const depthPct = Math.min(100, (entry.total / maxTotal) * 100);
   return (
-    <div className="group relative grid grid-cols-3 px-3 py-[4px] text-xs hover:bg-white/[0.03]">
+    <div
+      ref={ref}
+      className="relative grid grid-cols-3 gap-2 px-4 py-1.5 text-small"
+    >
       <div
         className="pointer-events-none absolute inset-y-0 transition-[width] duration-200 ease-out"
         style={{
           [isBuy ? "left" : "right"]: 0,
           width: `${depthPct}%`,
           background: isBuy
-            ? "rgba(61, 214, 140, 0.08)"
-            : "rgba(240, 69, 90, 0.08)",
+            ? "hsl(var(--heroui-success) / 0.1)"
+            : "hsl(var(--heroui-danger) / 0.1)",
         }}
       />
       <span
-        className={`relative font-mono tabular-nums ${
-          isBuy ? "text-[var(--color-green)]" : "text-[var(--color-red)]"
-        }`}
+        className={cn(
+          "relative font-mono tabular-nums",
+          isBuy ? "text-success" : "text-danger"
+        )}
       >
         {entry.price.toFixed(4)}
       </span>
-      <span className="relative text-right font-mono tabular-nums text-[var(--color-txt)]">
+      <span className="relative text-right font-mono tabular-nums text-default-700">
         {entry.quantity.toFixed(0)}
       </span>
-      <span className="relative text-right font-mono tabular-nums text-[var(--color-dim)]">
+      <span className="relative text-right font-mono tabular-nums text-default-400">
         {entry.total.toFixed(2)}
       </span>
     </div>
   );
-}
+});
+OrderRow.displayName = "OrderRow";
 
 export default function OrderBook() {
   const { contract } = useWallet();
@@ -88,7 +92,7 @@ export default function OrderBook() {
       }
     };
 
-    fetchBook();
+    void fetchBook();
     const iv = setInterval(fetchBook, 2000);
     return () => {
       cancelled = true;
@@ -112,50 +116,55 @@ export default function OrderBook() {
   const empty = !loading && bids.length === 0 && asks.length === 0;
 
   return (
-    <div className="panel flex flex-col">
-      <div className="panel-header">
-        <h2 className="panel-title">Order book</h2>
-        <div className="flex items-center gap-1.5">
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              error
-                ? "bg-[var(--color-red)]"
-                : "bg-[var(--color-green)] animate-pulse-dot"
-            }`}
-            aria-hidden
-          />
-          <span className="text-[10px] text-[var(--color-dim)]">
-            {error ? "Error" : "Live"}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-dim)]">
-        <span>Price</span>
-        <span className="text-right">Qty</span>
-        <span className="text-right">Total</span>
-      </div>
+    <Panel
+      flush
+      title="Order book"
+      endContent={
+        <Chip
+          size="sm"
+          variant="flat"
+          color={error ? "danger" : "success"}
+          startContent={
+            <span
+              className={cn(
+                "mx-0.5 h-1.5 w-1.5 rounded-full",
+                error ? "bg-danger" : "bg-success"
+              )}
+            />
+          }
+        >
+          {error ? "Error" : "Live"}
+        </Chip>
+      }
+    >
+      <ListHeader
+        className="grid-cols-3"
+        columns={[
+          { key: "p", label: "Price" },
+          { key: "q", label: "Qty", align: "right" },
+          { key: "t", label: "Total", align: "right" },
+        ]}
+      />
 
       {loading && (
-        <div className="space-y-1.5 px-3 py-3">
+        <div className="space-y-2 px-4 py-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="skeleton h-4 w-full" />
+            <Skeleton key={i} className="h-4 w-full rounded-sm" />
           ))}
         </div>
       )}
 
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
-          <p className="text-xs text-[var(--color-red)]">{error}</p>
-          <p className="text-[10px] text-[var(--color-dim)]">
-            Auto-retry every 2s
-          </p>
-        </div>
+        <EmptyState
+          icon="solar:danger-triangle-linear"
+          title={error}
+          description="Auto-retry every 2s"
+        />
       )}
 
       {!loading && !error && (
         <>
-          <div className="flex min-h-[120px] flex-col-reverse justify-end">
+          <div className="flex min-h-28 flex-col-reverse justify-end">
             {asks.slice(0, 12).map((a, i) => (
               <OrderRow
                 key={`a-${a.price}-${i}`}
@@ -165,42 +174,42 @@ export default function OrderBook() {
               />
             ))}
             {asks.length === 0 && !empty && (
-              <p className="px-3 py-2 text-center text-[10px] text-[var(--color-dim)]">
+              <p className="px-4 py-2 text-center text-tiny text-default-400">
                 No asks
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-between border-y border-[var(--color-border)] bg-[var(--color-bg)]/60 px-3 py-2">
-            <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+          <div className="flex items-center justify-between gap-3 border-y border-default-100 bg-content2/60 px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-tiny uppercase tracking-wide text-default-400">
                 Best bid
-              </span>
-              <span className="font-mono text-sm font-semibold tabular-nums text-[var(--color-green)]">
+              </p>
+              <p className="truncate font-mono text-small font-semibold tabular-nums text-success">
                 {bids[0]?.price.toFixed(4) ?? "—"}
-              </span>
+              </p>
             </div>
-            <div className="text-center">
-              <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+            <div className="min-w-0 text-center">
+              <p className="text-tiny uppercase tracking-wide text-default-400">
                 Spread
-              </span>
-              <p className="font-mono text-[11px] tabular-nums text-[var(--color-muted)]">
+              </p>
+              <p className="truncate font-mono text-tiny tabular-nums text-default-500">
                 {spread
                   ? `${spread.value.toFixed(4)} (${spread.pct.toFixed(2)}%)`
                   : "—"}
               </p>
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-[9px] uppercase tracking-wide text-[var(--color-dim)]">
+            <div className="min-w-0 text-right">
+              <p className="text-tiny uppercase tracking-wide text-default-400">
                 Best ask
-              </span>
-              <span className="font-mono text-sm font-semibold tabular-nums text-[var(--color-red)]">
+              </p>
+              <p className="truncate font-mono text-small font-semibold tabular-nums text-danger">
                 {asks[0]?.price.toFixed(4) ?? "—"}
-              </span>
+              </p>
             </div>
           </div>
 
-          <div className="flex min-h-[120px] flex-col">
+          <div className="flex min-h-28 flex-col">
             {bids.slice(0, 12).map((b, i) => (
               <OrderRow
                 key={`b-${b.price}-${i}`}
@@ -210,25 +219,21 @@ export default function OrderBook() {
               />
             ))}
             {bids.length === 0 && !empty && (
-              <p className="px-3 py-2 text-center text-[10px] text-[var(--color-dim)]">
+              <p className="px-4 py-2 text-center text-tiny text-default-400">
                 No bids
               </p>
             )}
           </div>
 
           {empty && (
-            <div className="border-t border-[var(--color-border)] px-4 py-8 text-center">
-              <p className="text-sm font-medium text-[var(--color-muted)]">
-                Book is empty
-              </p>
-              <p className="mt-1 text-xs leading-relaxed text-[var(--color-dim)]">
-                Place a limit order from the panel on the right. Depth appears
-                here after the transaction confirms.
-              </p>
-            </div>
+            <EmptyState
+              icon="solar:book-linear"
+              title="Book is empty"
+              description="Place a limit order from the trade panel. Depth appears after the transaction confirms."
+            />
           )}
         </>
       )}
-    </div>
+    </Panel>
   );
 }

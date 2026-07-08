@@ -1,8 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useWallet } from "./WalletProvider";
+import { Chip, Skeleton } from "@heroui/react";
 import type { EventLog } from "ethers";
+import { useWallet } from "./WalletProvider";
+import Panel from "./ui/panel";
+import ListHeader from "./ui/list-header";
+import EmptyState from "./ui/empty-state";
 
 interface TradeEvent {
   price: number;
@@ -10,10 +14,6 @@ interface TradeEvent {
   buyId: string;
   sellId: string;
   key: string;
-}
-
-function formatMatch(buyId: string, sellId: string) {
-  return `#${buyId}×#${sellId}`;
 }
 
 export default function RecentTrades() {
@@ -87,45 +87,44 @@ export default function RecentTrades() {
   }, [contract]);
 
   return (
-    <div className="panel flex flex-col">
-      <div className="panel-header">
-        <h2 className="panel-title">Recent trades</h2>
-        <span className="text-[10px] text-[var(--color-dim)]">
+    <Panel
+      flush
+      className="min-h-72"
+      title="Recent trades"
+      endContent={
+        <Chip size="sm" variant="flat">
           {loading ? "…" : `${trades.length} shown`}
-        </span>
-      </div>
+        </Chip>
+      }
+    >
+      <ListHeader
+        className="grid-cols-3"
+        columns={[
+          { key: "p", label: "Price" },
+          { key: "q", label: "Qty", align: "right" },
+          { key: "m", label: "Match", align: "right" },
+        ]}
+      />
 
-      <div className="grid grid-cols-3 px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-dim)]">
-        <span>Price</span>
-        <span className="text-right">Qty</span>
-        <span className="text-right">Match</span>
-      </div>
-
-      <div className="max-h-[280px] overflow-y-auto">
+      <div className="max-h-64 overflow-y-auto">
         {loading && (
-          <div className="space-y-1.5 px-3 py-3">
+          <div className="space-y-2 px-4 py-4">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="skeleton h-4 w-full" />
+              <Skeleton key={i} className="h-4 w-full rounded-sm" />
             ))}
           </div>
         )}
 
         {!loading && error && (
-          <div className="px-4 py-8 text-center">
-            <p className="text-xs text-[var(--color-red)]">{error}</p>
-          </div>
+          <EmptyState icon="solar:danger-triangle-linear" title={error} />
         )}
 
         {!loading && !error && trades.length === 0 && (
-          <div className="px-4 py-8 text-center">
-            <p className="text-sm font-medium text-[var(--color-muted)]">
-              No fills yet
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-[var(--color-dim)]">
-              When a buy and sell cross, the match prints here with the fill
-              price and size.
-            </p>
-          </div>
+          <EmptyState
+            icon="solar:list-linear"
+            title="No fills yet"
+            description="When a buy and sell cross, the match prints here."
+          />
         )}
 
         {!loading &&
@@ -133,23 +132,23 @@ export default function RecentTrades() {
           trades.map((t) => (
             <div
               key={t.key}
-              className="grid grid-cols-3 px-3 py-[5px] text-xs hover:bg-white/[0.03]"
+              className="grid grid-cols-3 gap-2 px-4 py-1.5 text-small hover:bg-default-100/40"
             >
-              <span className="font-mono tabular-nums text-[var(--color-txt)]">
+              <span className="font-mono tabular-nums text-default-700">
                 {t.price.toFixed(4)}
               </span>
-              <span className="text-right font-mono tabular-nums text-[var(--color-txt)]">
+              <span className="text-right font-mono tabular-nums text-default-700">
                 {t.quantity}
               </span>
               <span
-                className="truncate text-right font-mono text-[10px] text-[var(--color-dim)]"
-                title={formatMatch(t.buyId, t.sellId)}
+                className="truncate text-right font-mono text-tiny text-default-400"
+                title={`#${t.buyId}×#${t.sellId}`}
               >
-                {formatMatch(t.buyId, t.sellId)}
+                #{t.buyId}×#{t.sellId}
               </span>
             </div>
           ))}
       </div>
-    </div>
+    </Panel>
   );
 }

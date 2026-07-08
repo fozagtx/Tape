@@ -1,8 +1,13 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { useWallet } from "./WalletProvider";
+import { Button, Chip, Skeleton } from "@heroui/react";
+import { Icon } from "@iconify/react";
 import type { EventLog } from "ethers";
+import { useWallet } from "./WalletProvider";
+import Panel from "./ui/panel";
+import ListHeader from "./ui/list-header";
+import EmptyState from "./ui/empty-state";
 
 interface UserOrder {
   id: number;
@@ -10,6 +15,9 @@ interface UserOrder {
   price: number;
   quantity: number;
 }
+
+const COLS =
+  "grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)_44px_72px]";
 
 export default function UserOrders() {
   const { contract, address, isConnected } = useWallet();
@@ -19,38 +27,41 @@ export default function UserOrders() {
   const [cancelling, setCancelling] = useState<number | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
-  const fetchOrders = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!contract || !address) return;
-    if (!opts?.silent) setLoading(true);
-    try {
-      const filter = contract.filters.OrderPlaced(null, address);
-      const events = await contract.queryFilter(filter, -5000);
-      const parsed: UserOrder[] = [];
-      for (const ev of events) {
-        const e = ev as EventLog;
-        const id = Number(e.args?.id || 0);
-        try {
-          const order = await contract.getOrder(id);
-          if (Number(order.quantity) > 0) {
-            parsed.push({
-              id,
-              isBuy: order.isBuy,
-              price: Number(order.price) / 1e9,
-              quantity: Number(order.quantity),
-            });
+  const fetchOrders = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!contract || !address) return;
+      if (!opts?.silent) setLoading(true);
+      try {
+        const filter = contract.filters.OrderPlaced(null, address);
+        const events = await contract.queryFilter(filter, -5000);
+        const parsed: UserOrder[] = [];
+        for (const ev of events) {
+          const e = ev as EventLog;
+          const id = Number(e.args?.id || 0);
+          try {
+            const order = await contract.getOrder(id);
+            if (Number(order.quantity) > 0) {
+              parsed.push({
+                id,
+                isBuy: order.isBuy,
+                price: Number(order.price) / 1e9,
+                quantity: Number(order.quantity),
+              });
+            }
+          } catch {
+            /* skip */
           }
-        } catch {
-          /* skip missing */
         }
+        setOrders(parsed.reverse());
+        setError(null);
+      } catch {
+        setError("Could not load your open orders.");
+      } finally {
+        setLoading(false);
       }
-      setOrders(parsed.reverse());
-      setError(null);
-    } catch {
-      setError("Could not load your open orders.");
-    } finally {
-      setLoading(false);
-    }
-  }, [contract, address]);
+    },
+    [contract, address]
+  );
 
   useEffect(() => {
     if (!contract || !address) return;
@@ -90,124 +101,130 @@ export default function UserOrders() {
 
   if (!isConnected) {
     return (
-      <div className="panel px-4 py-8 text-center">
-        <p className="text-sm font-medium text-[var(--color-muted)]">
-          Your orders
-        </p>
-        <p className="mt-1 text-xs text-[var(--color-dim)]">
-          Connect a wallet to see and cancel open orders.
-        </p>
-      </div>
+      <Panel flush className="min-h-72" title="My orders">
+        <EmptyState
+          icon="solar:wallet-linear"
+          title="Connect wallet"
+          description="See and cancel your open orders."
+        />
+      </Panel>
     );
   }
 
   return (
-    <div className="panel flex flex-col">
-      <div className="panel-header">
-        <h2 className="panel-title">My orders</h2>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[var(--color-dim)]">
+    <Panel
+      flush
+      className="min-h-72"
+      title="My orders"
+      endContent={
+        <>
+          <Chip size="sm" variant="flat">
             {loading && orders.length === 0
               ? "Loading…"
               : `${orders.length} open`}
-          </span>
-          <button
-            type="button"
-            onClick={() => void fetchOrders()}
-            disabled={loading}
-            className="rounded px-1.5 py-0.5 text-[10px] text-[var(--color-muted)] transition-colors hover:bg-white/[0.04] hover:text-[var(--color-txt)] disabled:opacity-40"
+          </Chip>
+          <Button
+            isIconOnly
+            size="sm"
+            variant="light"
+            aria-label="Refresh orders"
+            className="min-h-8 min-w-8"
+            isDisabled={loading}
+            onPress={() => void fetchOrders()}
           >
-            Refresh
-          </button>
-        </div>
-      </div>
-
+            <Icon icon="solar:refresh-linear" width={16} />
+          </Button>
+        </>
+      }
+    >
       {cancelError && (
         <div
           role="alert"
-          className="mx-3 mt-2 rounded-md border border-[var(--color-red)]/25 bg-[var(--color-red-dim)] px-2.5 py-2 text-[11px] text-[var(--color-red)]"
+          className="mx-4 mt-4 rounded-medium border border-danger/25 bg-danger/10 px-4 py-3 text-tiny text-danger"
         >
           {cancelError}
         </div>
       )}
 
       {loading && orders.length === 0 && (
-        <div className="space-y-1.5 px-3 py-4">
+        <div className="space-y-2 px-4 py-4">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="skeleton h-8 w-full" />
+            <Skeleton key={i} className="h-9 w-full rounded-md" />
           ))}
         </div>
       )}
 
       {error && (
-        <div className="px-4 py-6 text-center">
-          <p className="text-xs text-[var(--color-red)]">{error}</p>
-          <button
-            type="button"
-            onClick={() => void fetchOrders()}
-            className="mt-2 text-xs font-medium text-[var(--color-accent)] underline-offset-2 hover:underline"
+        <EmptyState icon="solar:danger-triangle-linear" title={error}>
+          <Button
+            size="sm"
+            variant="flat"
+            color="warning"
+            onPress={() => void fetchOrders()}
           >
             Retry
-          </button>
-        </div>
+          </Button>
+        </EmptyState>
       )}
 
       {!error && !loading && orders.length === 0 && (
-        <div className="px-4 py-8 text-center">
-          <p className="text-sm font-medium text-[var(--color-muted)]">
-            No open orders
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-[var(--color-dim)]">
-            Resting limit orders you place show up here until they fill or you
-            cancel them.
-          </p>
-        </div>
+        <EmptyState
+          icon="solar:clipboard-list-linear"
+          title="No open orders"
+          description="Resting limits show here until they fill or you cancel them."
+        />
       )}
 
       {!error && orders.length > 0 && (
-        <div className="max-h-[250px] overflow-y-auto">
-          <div className="grid grid-cols-[52px_1fr_1fr_48px_72px] gap-1 px-3 py-2 text-[10px] font-medium uppercase tracking-wide text-[var(--color-dim)]">
-            <span>Side</span>
-            <span>Price</span>
-            <span>Qty</span>
-            <span>ID</span>
-            <span className="text-right"> </span>
-          </div>
-          {orders.map((o) => (
-            <div
-              key={o.id}
-              className="grid grid-cols-[52px_1fr_1fr_48px_72px] items-center gap-1 px-3 py-1.5 text-xs hover:bg-white/[0.03]"
-            >
-              <span
-                className={`font-semibold ${
-                  o.isBuy
-                    ? "text-[var(--color-green)]"
-                    : "text-[var(--color-red)]"
-                }`}
+        <div className="max-h-64 overflow-x-auto overflow-y-auto">
+          <div className="min-w-[300px]">
+            <ListHeader
+              className={COLS}
+              columns={[
+                { key: "s", label: "Side" },
+                { key: "p", label: "Price" },
+                { key: "q", label: "Qty" },
+                { key: "i", label: "ID" },
+                { key: "a", label: " " },
+              ]}
+            />
+            {orders.map((o) => (
+              <div
+                key={o.id}
+                className={`grid ${COLS} items-center gap-2 px-4 py-1.5 text-small hover:bg-default-100/40`}
               >
-                {o.isBuy ? "Buy" : "Sell"}
-              </span>
-              <span className="font-mono tabular-nums text-[var(--color-txt)]">
-                {o.price.toFixed(4)}
-              </span>
-              <span className="font-mono tabular-nums text-[var(--color-txt)]">
-                {o.quantity}
-              </span>
-              <span className="font-mono text-[var(--color-dim)]">#{o.id}</span>
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => handleCancel(o.id)}
-                  disabled={cancelling === o.id}
-                  className="min-h-8 min-w-[4rem] rounded border border-[var(--color-red)]/30 px-2 py-1 text-[10px] font-medium text-[var(--color-red)] transition-colors hover:bg-[var(--color-red-dim)] disabled:cursor-not-allowed disabled:opacity-50"
+                <Chip
+                  size="sm"
+                  variant="flat"
+                  color={o.isBuy ? "success" : "danger"}
+                  classNames={{ content: "text-tiny font-semibold" }}
                 >
-                  {cancelling === o.id ? "…" : "Cancel"}
-                </button>
+                  {o.isBuy ? "Buy" : "Sell"}
+                </Chip>
+                <span className="font-mono tabular-nums text-default-700">
+                  {o.price.toFixed(4)}
+                </span>
+                <span className="font-mono tabular-nums text-default-700">
+                  {o.quantity}
+                </span>
+                <span className="font-mono text-default-400">#{o.id}</span>
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="flat"
+                    color="danger"
+                    className="min-h-8 min-w-16 px-2 text-tiny"
+                    isLoading={cancelling === o.id}
+                    onPress={() => void handleCancel(o.id)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
-    </div>
+    </Panel>
   );
 }

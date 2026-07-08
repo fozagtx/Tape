@@ -1,28 +1,20 @@
 @import "tailwindcss";
+@plugin './hero.mts';
+@source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
+@custom-variant dark (&:is(.dark *));
 
+/*
+  Tape layout measures (4px grid)
+  ─ gutter: 16 / 24 / 32
+  ─ section gap: 16 (gap-4) · KPI gap: 20 (gap-5)
+  ─ panel pad: 16 (p-4)
+  ─ panel header: 16h / 12v (px-4 py-3)
+  ─ max shell: 1400px
+*/
 @theme inline {
-  --color-bg: #0c0d10;
-  --color-card: #14161b;
-  --color-elevated: #1a1d24;
-  --color-border: #262a33;
-  --color-border-strong: #343a46;
-  --color-green: #3dd68c;
-  --color-green-dim: rgba(61, 214, 140, 0.12);
-  --color-red: #f0455a;
-  --color-red-dim: rgba(240, 69, 90, 0.12);
-  --color-txt: #d4d7de;
-  --color-muted: #9aa0ab;
-  --color-dim: #6b7280;
-  --color-accent: #e8b84a;
-  --color-accent-dim: rgba(232, 184, 74, 0.12);
-  --color-white: #f4f5f7;
-  --font-mono: "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, monospace;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --tape-max: 87.5rem;
 }
 
 html {
@@ -32,29 +24,32 @@ html {
 }
 
 body {
-  background: var(--color-bg);
-  color: var(--color-txt);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
   min-height: 100%;
+  background: #0c0d10;
+  color: #d4d7de;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-strong);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-dim);
+/* Shared page shell — header / main / footer */
+.tape-shell {
+  width: 100%;
+  max-width: var(--tape-max);
+  margin-inline: auto;
+  padding-inline: 1rem; /* 16 */
 }
 
-/* Number inputs — hide spinners */
+@media (min-width: 768px) {
+  .tape-shell {
+    padding-inline: 1.5rem; /* 24 */
+  }
+}
+
+@media (min-width: 1024px) {
+  .tape-shell {
+    padding-inline: 2rem; /* 32 */
+  }
+}
+
+/* Hide number spinners */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;
@@ -64,102 +59,24 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
-::selection {
-  background: var(--color-accent);
-  color: #0c0d10;
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
-
-*:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-/* Motion — only when allowed */
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-      transform: translateY(4px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes pulse-dot {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.4;
-    }
-  }
-
-  .animate-fade-in {
-    animation: fade-in 0.25s ease-out;
-  }
-
-  .animate-pulse-dot {
-    animation: pulse-dot 2s ease-in-out infinite;
-  }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--heroui-default-300) / 0.5);
+  border-radius: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-in,
-  .animate-pulse-dot,
-  .animate-spin {
-    animation: none !important;
-  }
-}
-
-/* Panel shell */
-.panel {
-  border: 1px solid var(--color-border);
-  background: var(--color-card);
-  border-radius: 10px;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--color-border);
-  padding: 0.625rem 0.875rem;
-}
-
-.panel-title {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-white);
-}
-
-/* Skeleton shimmer */
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--color-elevated) 25%,
-    var(--color-border) 50%,
-    var(--color-elevated) 75%
-  );
-  background-size: 200% 100%;
-  border-radius: 4px;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .skeleton {
-    animation: shimmer 1.4s ease-in-out infinite;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

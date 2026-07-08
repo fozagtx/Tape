@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { Card, Chip, Skeleton, cn } from "@heroui/react";
+import { Icon } from "@iconify/react";
 import { useWallet } from "./WalletProvider";
 
 interface Stats {
@@ -20,6 +22,68 @@ const EMPTY: Stats = {
   bestBid: null,
   bestAsk: null,
 };
+
+/** design-promax KPI TrendCard pattern */
+type TrendCardProps = {
+  title: string;
+  value: string | null;
+  hint: string;
+  changeType: "positive" | "negative" | "neutral" | "warning";
+  icon: string;
+};
+
+const TrendCard = React.forwardRef<HTMLDivElement, TrendCardProps>(
+  ({ title, value, hint, changeType, icon }, ref) => (
+    <Card
+      ref={ref}
+      as="div"
+      className="border border-transparent dark:border-default-100"
+      shadow="none"
+    >
+      <div className="relative flex p-4">
+        <div className="flex min-w-0 flex-col gap-y-2 pr-10">
+          <dt className="text-small font-medium text-default-500">{title}</dt>
+          {value == null ? (
+            <Skeleton className="h-8 w-16 rounded-md" />
+          ) : (
+            <dd
+              className={cn(
+                "truncate font-mono text-2xl font-semibold tabular-nums text-default-700",
+                {
+                  "text-success": changeType === "positive",
+                  "text-danger": changeType === "negative",
+                  "text-warning": changeType === "warning",
+                }
+              )}
+            >
+              {value}
+            </dd>
+          )}
+          <span className="truncate text-tiny text-default-400">{hint}</span>
+        </div>
+        <Chip
+          className="absolute right-4 top-4"
+          classNames={{ content: "font-medium text-tiny p-0" }}
+          color={
+            changeType === "positive"
+              ? "success"
+              : changeType === "negative"
+                ? "danger"
+                : changeType === "warning"
+                  ? "warning"
+                  : "default"
+          }
+          radius="sm"
+          size="sm"
+          variant="flat"
+        >
+          <Icon height={12} width={12} icon={icon} aria-hidden />
+        </Chip>
+      </div>
+    </Card>
+  )
+);
+TrendCard.displayName = "TrendCard";
 
 export default function MarketStats() {
   const { contract } = useWallet();
@@ -66,7 +130,7 @@ export default function MarketStats() {
       }
     };
 
-    fetchStats();
+    void fetchStats();
     const iv = setInterval(fetchStats, 3000);
     return () => {
       cancelled = true;
@@ -77,70 +141,52 @@ export default function MarketStats() {
   const mid =
     stats.bestBid != null && stats.bestAsk != null
       ? (stats.bestBid + stats.bestAsk) / 2
-      : stats.bestBid ?? stats.bestAsk;
+      : (stats.bestBid ?? stats.bestAsk);
 
-  const cards = [
+  const cards: TrendCardProps[] = [
     {
-      label: "Mid / last",
-      value:
-        mid != null
-          ? mid.toFixed(4)
-          : loading
-            ? null
-            : "—",
-      sub: mid != null ? "gwei" : "no quote yet",
-      accent: "var(--color-white)",
+      title: "Mid / last",
+      value: mid != null ? mid.toFixed(4) : loading ? null : "—",
+      hint: mid != null ? "gwei" : "no quote yet",
+      changeType: "warning",
+      icon: "solar:chart-2-linear",
     },
     {
-      label: "Open bids",
+      title: "Open bids",
       value: loading ? null : String(stats.bids),
-      sub: "resting",
-      accent: "var(--color-green)",
+      hint: "resting",
+      changeType: "positive",
+      icon: "solar:arrow-up-linear",
     },
     {
-      label: "Open asks",
+      title: "Open asks",
       value: loading ? null : String(stats.asks),
-      sub: "resting",
-      accent: "var(--color-red)",
+      hint: "resting",
+      changeType: "negative",
+      icon: "solar:arrow-down-linear",
     },
     {
-      label: "Matches",
+      title: "Matches",
       value: loading ? null : String(stats.matches),
-      sub: `${stats.totalOrders} orders ever`,
-      accent: "var(--color-accent)",
+      hint: `${stats.totalOrders} orders ever`,
+      changeType: "neutral",
+      icon: "solar:transfer-horizontal-linear",
     },
   ];
 
   return (
-    <div>
+    <div className="flex flex-col gap-2">
       {failed && (
-        <p className="mb-2 text-xs text-[var(--color-red)]">
+        <p className="text-tiny text-danger">
           Could not refresh market stats. Retrying…
         </p>
       )}
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+      {/* design-promax KPI grid: gap-5, 1→2→4 cols */}
+      <dl className="grid w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
         {cards.map((c) => (
-          <div
-            key={c.label}
-            className="flex flex-col gap-1 rounded-[10px] border border-[var(--color-border)] bg-[var(--color-card)] px-3 py-2.5"
-          >
-            <span className="text-[10px] font-medium uppercase tracking-wide text-[var(--color-dim)]">
-              {c.label}
-            </span>
-            {c.value == null ? (
-              <span className="skeleton h-6 w-16" />
-            ) : (
-              <span
-                className="font-mono text-lg font-semibold tabular-nums"
-                style={{ color: c.accent }}
-              >
-                {c.value}
-              </span>
-            )}
-            <span className="text-[10px] text-[var(--color-dim)]">{c.sub}</span>
-          </div>
+          <TrendCard key={c.title} {...c} />
         ))}
-      </div>
+      </dl>
     </div>
   );
 }

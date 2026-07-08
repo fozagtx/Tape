@@ -15,26 +15,20 @@ graph TB
     E -->|Live UI| A
 ```
 
-## Deploy the Contract
+## Contract
 
-Tape ships **without** a pre-deployed contract. The address previously listed
-here (`0xFFFC…5cA8`) was an empty stub with no order-book logic — it has been removed.
+The UI always talks to the address in `lib/config.ts`:
 
-Deploy the real `TapeOrderBook` one of two ways:
+```ts
+contractAddress: "0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8"
+```
 
-1. **From the UI (recommended):** click **Connect Wallet**, switch to BOT Chain,
-   then use the **Deploy New Contract** button on the home screen. The order
-   book goes live for the current session.
-2. **Via Hardhat** (needs a funded deployer key on BOT Chain testnet):
-   ```bash
-   npx hardhat compile
-   PRIVATE_KEY=0xYOUR_KEY npx hardhat run scripts/deploy.ts --network botchain-testnet
-   ```
-   Then paste the printed address into the **Load existing contract** field in the UI.
+Deploy / upgrade with Hardhat (not the web UI), then put the new address in that config field:
 
-> The contract has no constructor args. Its creation bytecode is embedded in
-> `lib/bytecode.ts`, regenerated from `contracts/TapeOrderBook.sol` via
-> `node scripts/gen_bytecode.js`.
+```bash
+npx hardhat compile
+PRIVATE_KEY=0xYOUR_KEY npx hardhat run scripts/deploy.ts --network botchain-testnet
+```
 
 ## Project Structure
 
@@ -44,8 +38,8 @@ tape/
 │   ├── layout.tsx          # Root layout + WalletProvider
 │   ├── page.tsx            # Main trading page
 │   ├── globals.css         # Global styles + Tailwind v4
-│   └── components/         # 9 UI components
-├── lib/                    # Config, ABI, seed data
+│   └── components/         # UI components
+├── lib/                    # Config, ABI, bytecode
 ├── contracts/              # TapeOrderBook.sol
 ├── scripts/                # Deploy scripts
 └── bot/                    # Market-making bot
@@ -58,24 +52,14 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
-
-### Deploy Your Own
-
-```bash
-npx hardhat compile
-npx hardhat run scripts/deploy.ts --network botchain-testnet
-```
+Open [http://localhost:3000](http://localhost:3000). The book loads from the configured contract over RPC; connect a wallet only to place or cancel orders.
 
 ## Features
 
 - **Live Order Book** — On-chain depth, polled every 2s via `getBookSide`
-- **Price chart** — SVG line built only from real `OrderMatched` fills (no mock series)
+- **Price chart** — SVG line from real `OrderMatched` fills
 - **Limit Orders** — Buy/sell with price (gwei) & quantity, matched on-chain
 - **Recent Trades** — Real-time `OrderMatched` event tape
-- **My Orders** — Open orders with on-chain cancel + error feedback
+- **My Orders** — Open orders with on-chain cancel
 - **Wallet Connect** — MetaMask + BOT Chain Testnet add/switch
-- **In-Browser Deploy** — Deploy or load the real contract from the UI (session only)
-- **Honest empty states** — Clear next actions when book/trades/orders are empty
 - **Responsive** — Mobile-first trading layout
-

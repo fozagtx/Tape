@@ -12,10 +12,14 @@
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network botchain"
   },
   "dependencies": {
+    "@heroui/react": "^2.8.10",
+    "@iconify/react": "^6.0.2",
     "ethers": "^6.13.4",
+    "framer-motion": "^11.18.2",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "recharts": "^3.9.2"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

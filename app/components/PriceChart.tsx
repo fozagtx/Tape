@@ -1,14 +1,28 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useWallet } from "./WalletProvider";
+import { Card, Chip, Skeleton, Spacer, cn } from "@heroui/react";
+import { Icon } from "@iconify/react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import type { EventLog } from "ethers";
+import { useWallet } from "./WalletProvider";
+import EmptyState from "./ui/empty-state";
 
 interface Point {
   price: number;
   ts: number;
+  label: string;
 }
 
+/** design-promax Graphs pattern — Card + AreaChart + Chip delta */
 export default function PriceChart() {
   const { contract } = useWallet();
   const [points, setPoints] = useState<Point[]>([]);
@@ -48,7 +62,14 @@ export default function PriceChart() {
             }
             ts = blockCache.get(bn) ?? Date.now();
           }
-          parsed.push({ price, ts });
+          parsed.push({
+            price,
+            ts,
+            label: new Date(ts).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          });
         }
 
         if (!cancelled) {
@@ -65,15 +86,28 @@ export default function PriceChart() {
     })();
 
     const onMatch = (
-      _buyId: bigint,
-      _sellId: bigint,
-      _buyer: string,
-      _seller: string,
+      _a: bigint,
+      _b: bigint,
+      _c: string,
+      _d: string,
       price: bigint
     ) => {
       const p = Number(price) / 1e9;
       if (!(p > 0)) return;
-      setPoints((prev) => [...prev, { price: p, ts: Date.now() }].slice(-80));
+      const ts = Date.now();
+      setPoints((prev) =>
+        [
+          ...prev,
+          {
+            price: p,
+            ts,
+            label: new Date(ts).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          },
+        ].slice(-80)
+      );
     };
 
     contract.on("OrderMatched", onMatch);
@@ -83,157 +117,199 @@ export default function PriceChart() {
     };
   }, [contract]);
 
-  const chart = useMemo(() => {
+  const summary = useMemo(() => {
     if (points.length === 0) return null;
     const prices = points.map((p) => p.price);
-    const min = Math.min(...prices);
-    const max = Math.max(...prices);
-    const range = max - min || max * 0.01 || 1;
-    const pad = range * 0.08;
-    const yMin = min - pad;
-    const yMax = max + pad;
-    const yRange = yMax - yMin || 1;
-
-    const W = 400;
-    const H = 140;
-    const coords = points.map((p, i) => {
-      const x =
-        points.length === 1 ? W / 2 : (i / (points.length - 1)) * W;
-      const y = H - ((p.price - yMin) / yRange) * H;
-      return { x, y, price: p.price };
-    });
-
-    const line = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x},${c.y}`).join(" ");
-    const area =
-      line +
-      ` L${coords[coords.length - 1].x},${H} L${coords[0].x},${H} Z`;
-
     const first = prices[0];
     const last = prices[prices.length - 1];
     const up = last >= first;
     const changePct =
       first > 0 ? (((last - first) / first) * 100).toFixed(2) : "0.00";
-
     return {
-      line,
-      area,
       last,
-      first,
       up,
       changePct,
-      min,
-      max,
-      W,
-      H,
-      stroke: up ? "var(--color-green)" : "var(--color-red)",
-      fill: up
-        ? "rgba(61, 214, 140, 0.12)"
-        : "rgba(240, 69, 90, 0.12)",
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      changeType: up ? ("positive" as const) : ("negative" as const),
     };
   }, [points]);
 
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2 className="panel-title">Price</h2>
-        {chart && (
-          <div className="flex items-baseline gap-2">
-            <span className="font-mono text-sm font-semibold tabular-nums text-[var(--color-white)]">
-              {chart.last.toFixed(4)}
-            </span>
-            <span
-              className={`font-mono text-[10px] tabular-nums ${
-                chart.up
-                  ? "text-[var(--color-green)]"
-                  : "text-[var(--color-red)]"
-              }`}
-            >
-              {chart.up ? "+" : ""}
-              {chart.changePct}%
-            </span>
-            <span className="text-[10px] text-[var(--color-dim)]">gwei</span>
+    <Card
+      as="dl"
+      className="border border-transparent dark:border-default-100"
+      shadow="none"
+    >
+      <section className="flex flex-col p-4 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <dt className="text-medium font-medium text-foreground">Price</dt>
+            <p className="text-tiny text-default-500">
+              On-chain fills only · gwei
+            </p>
           </div>
-        )}
-      </div>
+          {summary && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-large font-semibold tabular-nums text-default-700">
+                {summary.last.toFixed(4)}
+              </span>
+              <Chip
+                classNames={{ content: "font-medium text-tiny" }}
+                color={
+                  summary.changeType === "positive" ? "success" : "danger"
+                }
+                radius="sm"
+                size="sm"
+                variant="flat"
+                startContent={
+                  <Icon
+                    height={12}
+                    width={12}
+                    aria-hidden
+                    icon={
+                      summary.up
+                        ? "solar:arrow-right-up-linear"
+                        : "solar:arrow-right-down-linear"
+                    }
+                  />
+                }
+              >
+                {summary.up ? "+" : ""}
+                {summary.changePct}%
+              </Chip>
+            </div>
+          )}
+        </div>
 
-      <div className="px-3 pb-3 pt-2">
-        {loading && (
-          <div className="flex h-[140px] flex-col justify-end gap-2">
-            <div className="skeleton h-full w-full rounded-md" />
-          </div>
-        )}
+        <Spacer y={4} />
+
+        {loading && <Skeleton className="h-44 w-full rounded-medium" />}
 
         {!loading && error && (
-          <div className="flex h-[140px] flex-col items-center justify-center gap-2 text-center">
-            <p className="text-xs text-[var(--color-red)]">{error}</p>
-            <p className="text-[10px] text-[var(--color-dim)]">
-              Trades will chart automatically once matches land on-chain.
-            </p>
+          <EmptyState
+            className="h-44 py-0"
+            icon="solar:danger-triangle-linear"
+            title={error}
+          />
+        )}
+
+        {!loading && !error && !summary && (
+          <EmptyState
+            className="h-44 py-0"
+            icon="solar:chart-linear"
+            title="No trades yet"
+            description="Place a buy and sell at overlapping prices to print a match. Chart builds from real on-chain fills only."
+          />
+        )}
+
+        {!loading && !error && summary && (
+          <div className="h-44 w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart
+                data={points}
+                margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="tapePrice" x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset="0%"
+                      stopColor={
+                        summary.up
+                          ? "hsl(var(--heroui-success))"
+                          : "hsl(var(--heroui-danger))"
+                      }
+                      stopOpacity={0.3}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={
+                        summary.up
+                          ? "hsl(var(--heroui-success))"
+                          : "hsl(var(--heroui-danger))"
+                      }
+                      stopOpacity={0}
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  stroke="hsl(var(--heroui-default-100))"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="label"
+                  tick={{
+                    fontSize: 11,
+                    fill: "hsl(var(--heroui-default-400))",
+                  }}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={28}
+                />
+                <YAxis
+                  domain={["auto", "auto"]}
+                  width={44}
+                  tick={{
+                    fontSize: 11,
+                    fill: "hsl(var(--heroui-default-400))",
+                  }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v: number) => Number(v).toFixed(2)}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--heroui-content1))",
+                    border: "1px solid hsl(var(--heroui-default-100))",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                  labelStyle={{ color: "hsl(var(--heroui-default-500))" }}
+                  formatter={(value) => [
+                    `${Number(value).toFixed(4)} gwei`,
+                    "Price",
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="price"
+                  stroke={
+                    summary.up
+                      ? "hsl(var(--heroui-success))"
+                      : "hsl(var(--heroui-danger))"
+                  }
+                  fill="url(#tapePrice)"
+                  strokeWidth={2}
+                  isAnimationActive={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         )}
 
-        {!loading && !error && !chart && (
-          <div className="flex h-[140px] flex-col items-center justify-center gap-1.5 px-4 text-center">
-            <p className="text-sm font-medium text-[var(--color-muted)]">
-              No trades yet
-            </p>
-            <p className="max-w-xs text-xs leading-relaxed text-[var(--color-dim)]">
-              Place a buy and a sell at overlapping prices to print a match.
-              The price line builds from real on-chain fills only.
-            </p>
-          </div>
-        )}
-
-        {!loading && !error && chart && (
-          <div className="relative">
-            <svg
-              viewBox={`0 0 ${chart.W} ${chart.H}`}
-              className="h-[140px] w-full"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label={`Price chart, last ${chart.last.toFixed(4)} gwei`}
-            >
-              <defs>
-                <linearGradient id="tapePriceFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={chart.stroke} stopOpacity="0.2" />
-                  <stop offset="100%" stopColor={chart.stroke} stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              {/* Mid grid */}
-              <line
-                x1="0"
-                y1={chart.H / 2}
-                x2={chart.W}
-                y2={chart.H / 2}
-                stroke="var(--color-border)"
-                strokeWidth="1"
-                vectorEffect="non-scaling-stroke"
-              />
-              <path d={chart.area} fill="url(#tapePriceFill)" />
-              <path
-                d={chart.line}
-                fill="none"
-                stroke={chart.stroke}
-                strokeWidth="2"
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
-            <div className="mt-1 flex justify-between text-[10px] text-[var(--color-dim)]">
+        {summary && (
+          <>
+            <Spacer y={2} />
+            <div className="flex justify-between gap-3 text-tiny text-default-400">
               <span className="font-mono tabular-nums">
-                Low {chart.min.toFixed(4)}
+                Low {summary.min.toFixed(4)}
               </span>
-              <span className="text-[var(--color-dim)]">
+              <span
+                className={cn(
+                  "font-mono tabular-nums",
+                  summary.up ? "text-success" : "text-danger"
+                )}
+              >
                 {points.length} fill{points.length === 1 ? "" : "s"}
               </span>
               <span className="font-mono tabular-nums">
-                High {chart.max.toFixed(4)}
+                High {summary.max.toFixed(4)}
               </span>
             </div>
-          </div>
+          </>
         )}
-      </div>
-    </div>
+      </section>
+    </Card>
   );
 }
