@@ -5,12 +5,12 @@ import { useWallet } from "./WalletProvider";
 import { ethers } from "ethers";
 import { TAPE_ABI } from "@/lib/abi";
 import { CHAIN_CONFIG } from "@/lib/config";
-
-const BYTECODE = "0x608060405234801561001057600080fd5b5060016001600281919091556000600355600060045560006005556000600655610b7e8061003c6000396000f3fe";
+import { TAPE_BYTECODE } from "@/lib/bytecode";
 
 export default function DeployContract() {
-  const { isConnected, signer, setContract, chainId, contractAddress } = useWallet();
+  const { isConnected, signer, setContract, chainId, contractAddress, provider } = useWallet();
   const [isDeploying, setIsDeploying] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contractInput, setContractInput] = useState("");
 
@@ -19,14 +19,12 @@ export default function DeployContract() {
   const handleDeploy = async () => {
     if (!signer) { setError("Connect wallet first"); return; }
     if (!isCorrectChain) { setError("Switch to BOT Chain first"); return; }
-    setIsDeploying(true);
-    setError(null);
+    setIsDeploying(true); setError(null);
     try {
-      const factory = new ethers.ContractFactory(TAPE_ABI, BYTECODE, signer);
+      const factory = new ethers.ContractFactory(TAPE_ABI, TAPE_BYTECODE, signer);
       const contract = await factory.deploy();
       await contract.waitForDeployment();
-      const address = await contract.getAddress();
-      setContract(address);
+      setContract(await contract.getAddress());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Deployment failed");
     } finally {
@@ -34,13 +32,21 @@ export default function DeployContract() {
     }
   };
 
-  const handleLoadExisting = () => {
-    if (!contractInput || !ethers.isAddress(contractInput)) {
-      setError("Enter a valid contract address");
-      return;
+  const handleLoad = async () => {
+    if (!ethers.isAddress(contractInput)) { setError("Enter a valid address"); return; }
+    if (!provider) { setError("Wallet not connected"); return; }
+    setIsValidating(true); setError(null);
+    try {
+      const code = await provider.getCode(contractInput);
+      if (code === "0x") { setError("No contract at that address"); return; }
+      const probe = new ethers.Contract(contractInput, TAPE_ABI, provider);
+      await probe.nextOrderId();
+      setContract(contractInput);
+    } catch {
+      setError("Address is not a TapeOrderBook contract");
+    } finally {
+      setIsValidating(false);
     }
-    setContract(contractInput);
-    setError(null);
   };
 
   if (!isConnected) {
@@ -94,7 +100,9 @@ export default function DeployContract() {
         <label className="mb-1 block text-xs font-medium text-[var(--color-dim)]">Existing contract Address</label>
         <div className="flex gap-2">
           <input type="text" value={contractInput} onChange={(e) => setContractInput(e.target.value)} placeholder="0x..." className="flex-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-white outline-none font-mono focus:border-[var(--color-accent)]/50" />
-          <button onClick={handleLoadExisting} className="rounded-lg border border-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)]/10">Load</button>
+          <button onClick={handleLoad} disabled={isValidating} className="rounded-lg border border-[var(--color-accent)] px-4 py-2 text-sm font-medium text-[var(--color-accent)] transition-colors hover:bg-[var(--color-accent)]/10 disabled:opacity-50">
+            {isValidating ? "..." : "Load"}
+          </button>
         </div>
       </div>
       {error && <div className="rounded-lg bg-[var(--color-red)]/10 px-3 py-2 text-xs text-[var(--color-red)]">✕ {error}</div>}
