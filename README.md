@@ -64,18 +64,3 @@ npx hardhat run scripts/deploy.ts --network botchain-testnet
 - **Seeded Data** — Full demo without wallet
 - **Responsive** — Mobile-first design
 
-## Links
-
-- [BOT Chain Website](https://www.botchain.ai/)
-- [Developer Docs](https://dev-docs.botchain.ai/docs/Developers/quick-guide/)
-- [Testnet Faucet](https://faucet.botchain.ai/basic)
-- [Block Explorer (Testnet)](https://scan.bohr.life)
-- [Block Explorer (Mainnet)](https://scan.botchain.ai)
-- [BOT DEX](https://dex.botchain.ai/)
-- [BO Wallet](https://wallet.botchain.ai/)
-- [Bridge](https://bridge.botchain.ai/)
-- [GitHub](https://github.com/BOTChain-bot)
-
-## License
-
-MIT
