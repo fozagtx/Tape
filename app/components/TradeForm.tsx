@@ -173,8 +173,8 @@ export default function TradeForm() {
         </CellWrapper>
 
         <p className="text-tiny leading-relaxed text-default-400">
-          Orders settle on-chain (~0.75s blocks). Gas is paid in BOT. Confirm
-          the fee in your wallet before signing.
+          Orders settle on-chain. Confirm the gas fee in your wallet before
+          signing.
         </p>
 
         <Button

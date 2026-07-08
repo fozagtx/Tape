@@ -5,11 +5,10 @@
 
 /*
   Tape layout measures (4px grid)
-  ─ gutter: 16 / 24 / 32
-  ─ section gap: 16 (gap-4) · KPI gap: 20 (gap-5)
-  ─ panel pad: 16 (p-4)
-  ─ panel header: 16h / 12v (px-4 py-3)
-  ─ max shell: 1400px
+  gutter: 16 / 24 / 32
+  section gap: 16 · KPI gap: 20
+  panel pad: 16
+  max shell: 1400px
 */
 @theme inline {
   --font-sans: var(--font-geist-sans);
@@ -26,39 +25,36 @@ html {
 body {
   min-height: 100%;
   min-height: 100dvh;
-  background: #0c0d10;
-  color: #d4d7de;
-  /* Prevent rubber-band / pull gap flash at top on mobile */
+  /* Use theme tokens so light/dark both work */
+  background-color: hsl(var(--heroui-background));
+  color: hsl(var(--heroui-foreground));
   overscroll-behavior-y: none;
 }
 
-/* Kill accidental full-page horizontal pull */
 html,
 body {
   overflow-x: hidden;
 }
 
-/* Shared page shell — header / main / footer */
 .tape-shell {
   width: 100%;
   max-width: var(--tape-max);
   margin-inline: auto;
-  padding-inline: 1rem; /* 16 */
+  padding-inline: 1rem;
 }
 
 @media (min-width: 768px) {
   .tape-shell {
-    padding-inline: 1.5rem; /* 24 */
+    padding-inline: 1.5rem;
   }
 }
 
 @media (min-width: 1024px) {
   .tape-shell {
-    padding-inline: 2rem; /* 32 */
+    padding-inline: 2rem;
   }
 }
 
-/* Hide number spinners */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
   -webkit-appearance: none;

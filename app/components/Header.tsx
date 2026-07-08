@@ -20,6 +20,7 @@ import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useWallet } from "./WalletProvider";
 import { CHAIN_CONFIG } from "@/lib/config";
+import ThemeSwitch from "./ThemeSwitch";
 
 function shortAddr(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -72,6 +73,9 @@ export default function Header() {
         </NavbarBrand>
 
         <NavbarContent justify="end" className="gap-2">
+          <NavbarItem className="hidden sm:flex">
+            <ThemeSwitch />
+          </NavbarItem>
           <NavbarItem className="hidden md:flex">
             <Link
               as={NextLink}
@@ -166,6 +170,10 @@ export default function Header() {
               </NavbarItem>
             </>
           )}
+
+          <NavbarItem className="flex sm:hidden">
+            <ThemeSwitch />
+          </NavbarItem>
         </NavbarContent>
       </Navbar>
 

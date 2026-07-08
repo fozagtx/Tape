@@ -1,7 +1,35 @@
 import { heroui } from "@heroui/react";
 
 export default heroui({
+  defaultTheme: "dark",
   themes: {
+    light: {
+      colors: {
+        background: "#f6f7f9",
+        foreground: "#0c0d10",
+        content1: "#ffffff",
+        content2: "#eef0f4",
+        content3: "#e4e7ed",
+        content4: "#d8dce5",
+        primary: {
+          DEFAULT: "#c9962a",
+          foreground: "#0c0d10",
+        },
+        success: {
+          DEFAULT: "#0f9f62",
+          foreground: "#ffffff",
+        },
+        danger: {
+          DEFAULT: "#e11d48",
+          foreground: "#ffffff",
+        },
+        warning: {
+          DEFAULT: "#c9962a",
+          foreground: "#0c0d10",
+        },
+        focus: "#c9962a",
+      },
+    },
     dark: {
       colors: {
         background: "#0c0d10",

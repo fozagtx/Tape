@@ -20,7 +20,7 @@ graph TB
 The UI always talks to the address in `lib/config.ts`:
 
 ```ts
-contractAddress: "0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8"
+contractAddress: "0x55Fa3C86C38FEE7F3587D883D6300d3243507CF0"
 ```
 
 Deploy / upgrade with Hardhat (not the web UI), then put the new address in that config field:

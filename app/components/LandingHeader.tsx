@@ -17,6 +17,7 @@ import { Icon } from "@iconify/react";
 import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useWallet } from "./WalletProvider";
+import ThemeSwitch from "./ThemeSwitch";
 
 const nav = [
   { label: "How it works", href: "#how" },
@@ -84,6 +85,9 @@ export default function LandingHeader() {
         </NavbarContent>
 
         <NavbarContent justify="end" className="gap-2">
+          <NavbarItem className="flex">
+            <ThemeSwitch />
+          </NavbarItem>
           <NavbarItem>
             <Button
               radius="full"
@@ -121,6 +125,9 @@ export default function LandingHeader() {
               </Link>
             </NavbarMenuItem>
           ))}
+          <NavbarMenuItem className="flex justify-center py-2">
+            <ThemeSwitch />
+          </NavbarMenuItem>
           <NavbarMenuItem>
             <Button
               fullWidth
