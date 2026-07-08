@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useWallet } from "./WalletProvider";
+import type { EventLog } from "ethers";
 
 interface UserOrder { id: number; isBuy: boolean; price: number; quantity: number; }
 
@@ -18,7 +19,8 @@ export default function UserOrders() {
       const events = await contract.queryFilter(filter, -5000);
       const parsed: UserOrder[] = [];
       for (const ev of events) {
-        const id = Number(ev.args?.id || 0);
+        const e = ev as EventLog;
+        const id = Number(e.args?.id || 0);
         try {
           const order = await contract.getOrder(id);
           if (Number(order.quantity) > 0) {
