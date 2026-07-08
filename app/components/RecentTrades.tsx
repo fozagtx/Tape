@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useWallet } from "./WalletProvider";
+import type { EventLog } from "ethers";
 
 interface TradeEvent { price: number; quantity: number; buyId: bigint; sellId: bigint; timestamp: number; }
 
@@ -14,13 +15,16 @@ export default function RecentTrades() {
     if (!contract) return;
     const filter = contract.filters.OrderMatched();
     contract.queryFilter(filter, -1000).then((events) => {
-      const parsed = events.map((ev) => ({
-        price: Number(ev.args?.price || 0) / 1e9,
-        quantity: Number(ev.args?.quantity || 0),
-        buyId: ev.args?.buyId || 0n,
-        sellId: ev.args?.sellId || 0n,
-        timestamp: Date.now(),
-      }));
+      const parsed = events.map((ev) => {
+        const e = ev as EventLog;
+        return {
+          price: Number(e.args?.price || 0) / 1e9,
+          quantity: Number(e.args?.quantity || 0),
+          buyId: e.args?.buyId || 0n,
+          sellId: e.args?.sellId || 0n,
+          timestamp: Date.now(),
+        };
+      });
       setTrades(parsed.reverse().slice(0, 20));
       setLoading(false);
     }).catch(() => setLoading(false));
