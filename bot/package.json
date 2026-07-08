@@ -1,0 +1,11 @@
+{
+  "name": "tape-bot",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.4"
+  }
+}
