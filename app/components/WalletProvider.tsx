@@ -58,6 +58,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const balance = await provider.getBalance(accounts[0]);
       const chainId = Number(network.chainId);
 
+      const contractAddr = CHAIN_CONFIG.contractAddress;
+      const contract = contractAddr ? new ethers.Contract(contractAddr, TAPE_ABI, signer) : null;
+
       setState({
         address: accounts[0],
         balance: ethers.formatEther(balance),
@@ -66,8 +69,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         isConnecting: false,
         provider,
         signer,
-        contract: null,
-        contractAddress: null,
+        contract,
+        contractAddress: contractAddr,
         error: null,
       });
     } catch (err) {
