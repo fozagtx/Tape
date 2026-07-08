@@ -15,12 +15,26 @@ graph TB
     E -->|Live UI| A
 ```
 
-## Deployed Contract
+## Deploy the Contract
 
-| Network | Address |
-|---------|---------|
-| **Testnet** | `0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8` |
-| **Explorer** | [scan.bohr.life](https://scan.bohr.life/address/0xFFFC911869A14f2D9d25A05D0CcA3BE7c6135cA8) |
+Tape ships **without** a pre-deployed contract. The address previously listed
+here (`0xFFFC…5cA8`) was an empty stub with no order-book logic — it has been removed.
+
+Deploy the real `TapeOrderBook` one of two ways:
+
+1. **From the UI (recommended):** click **Connect Wallet**, switch to BOT Chain,
+   then use the **Deploy New Contract** button on the home screen. The deployed
+   address is saved to `localStorage` and the order book goes live immediately.
+2. **Via Hardhat** (needs a funded deployer key on BOT Chain testnet):
+   ```bash
+   npx hardhat compile
+   PRIVATE_KEY=0xYOUR_KEY npx hardhat run scripts/deploy.ts --network botchain-testnet
+   ```
+   Then paste the printed address into the **Load existing contract** field in the UI.
+
+> The contract has no constructor args. Its creation bytecode is embedded in
+> `lib/bytecode.ts`, regenerated from `contracts/TapeOrderBook.sol` via
+> `node scripts/gen_bytecode.js`.
 
 ## Project Structure
 
@@ -55,12 +69,11 @@ npx hardhat run scripts/deploy.ts --network botchain-testnet
 
 ## Features
 
-- **Live Order Book** — Depth visualization with animated updates
-- **Limit Orders** — Buy/sell with price & quantity
-- **Price Chart** — SVG sparkline with gradient area fill
-- **Recent Trades** — Real-time trade tape with time-ago
-- **My Orders** — Open/filled/cancelled with cancel action
+- **Live Order Book** — On-chain depth, polled every 2s via `getBookSide`
+- **Limit Orders** — Buy/sell with price (gwei) & quantity, matched on-chain
+- **Recent Trades** — Real-time `OrderMatched` event tape
+- **My Orders** — Open orders with on-chain cancel
 - **Wallet Connect** — MetaMask + BOT Chain network switching
-- **Seeded Data** — Full demo without wallet
+- **In-Browser Deploy** — Deploy the real contract from the UI (no CLI needed)
 - **Responsive** — Mobile-first design
 

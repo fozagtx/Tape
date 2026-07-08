@@ -58,8 +58,26 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const balance = await provider.getBalance(accounts[0]);
       const chainId = Number(network.chainId);
 
-      const contractAddr = CHAIN_CONFIG.contractAddress;
-      const contract = contractAddr ? new ethers.Contract(contractAddr, TAPE_ABI, signer) : null;
+      // Validate the configured address on-chain — getCode must be non-empty AND
+      // nextOrderId() must respond — so a stub/wrong/fake address is rejected
+      // instead of silently rendering empty data (which is what the old hardcoded
+      // stub address did).
+      let contract: ethers.Contract | null = null;
+      let contractAddress: string | null = null;
+      const candidate = (CHAIN_CONFIG.contractAddress || "").trim();
+      if (candidate && ethers.isAddress(candidate)) {
+        const code = await provider.getCode(candidate);
+        if (code !== "0x") {
+          const probe = new ethers.Contract(candidate, TAPE_ABI, provider);
+          try {
+            await probe.nextOrderId();
+            contract = new ethers.Contract(candidate, TAPE_ABI, signer);
+            contractAddress = candidate;
+          } catch {
+            // Address has code but is NOT a TapeOrderBook (e.g. the old stub).
+          }
+        }
+      }
 
       setState({
         address: accounts[0],
@@ -70,7 +88,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         provider,
         signer,
         contract,
-        contractAddress: contractAddr,
+        contractAddress,
         error: null,
       });
     } catch (err) {
