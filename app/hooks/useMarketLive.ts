@@ -38,6 +38,8 @@ export type MarketLive = {
   asks: BookEntry[];
   trades: TradeRow[];
   refresh: () => Promise<void>;
+  /** Full refresh including trade history (call after place/cancel) */
+  refreshAll: () => Promise<void>;
 };
 
 const EMPTY_STATS: MarketStats = {
@@ -49,22 +51,31 @@ const EMPTY_STATS: MarketStats = {
   bestAsk: null,
 };
 
-/** Public BOT RPC throttles if we poll too hard */
-const POLL_MS = 6000;
+const POLL_MS = 5000;
 
-function formatSide(prices: bigint[], qtys: bigint[]): BookEntry[] {
+function toArr(x: unknown): bigint[] {
+  if (Array.isArray(x)) return x as bigint[];
+  if (x && typeof x === "object" && "length" in (x as object)) {
+    return Array.from(x as ArrayLike<bigint>);
+  }
+  return [];
+}
+
+function formatSide(pricesRaw: unknown, qtysRaw: unknown): BookEntry[] {
+  const prices = toArr(pricesRaw);
+  const qtys = toArr(qtysRaw);
   let running = 0;
   return prices.map((p, i) => {
     const price = Number(p) / 1e9;
-    const qty = Number(qtys[i]);
+    const qty = Number(qtys[i] ?? 0);
     running += price * qty;
     return { price, quantity: qty, total: running };
   });
 }
 
 /**
- * Live market data with light RPC usage.
- * Poll only (no eth_getLogs subscriptions) so public endpoints stay healthy.
+ * Live market data from the real on-chain TapeOrderBook.
+ * No mocks — zeros mean empty book or no fills yet.
  */
 export function useMarketLive(contract: Contract | null): MarketLive {
   const [ready, setReady] = useState(false);
@@ -76,8 +87,35 @@ export function useMarketLive(contract: Contract | null): MarketLive {
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const contractRef = useRef(contract);
   const inflight = useRef(false);
-  const tradesLoaded = useRef(false);
   contractRef.current = contract;
+
+  const loadTrades = useCallback(async () => {
+    const c = contractRef.current;
+    if (!c) return;
+    try {
+      const filter = c.filters.OrderMatched();
+      const events = await c.queryFilter(filter, -300);
+      const rows: TradeRow[] = events
+        .map((ev, idx) => {
+          const e = ev as EventLog;
+          const buyId = String(e.args?.buyId ?? 0);
+          const sellId = String(e.args?.sellId ?? 0);
+          return {
+            price: Number(e.args?.price || 0) / 1e9,
+            quantity: Number(e.args?.quantity || 0),
+            buyId,
+            sellId,
+            key: `${e.transactionHash ?? idx}-${buyId}-${sellId}`,
+            ts: Date.now() - (events.length - idx) * 750,
+          };
+        })
+        .reverse()
+        .slice(0, 40);
+      setTrades(rows);
+    } catch {
+      /* history optional when RPC is busy */
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const c = contractRef.current;
@@ -85,20 +123,23 @@ export function useMarketLive(contract: Contract | null): MarketLive {
     inflight.current = true;
 
     try {
-      // 3 calls only (batched by provider). Best bid/ask from book sides.
       const [statsRaw, bidData, askData] = await Promise.all([
         c.stats(),
         c.getBookSide(true, 15),
         c.getBookSide(false, 15),
       ]);
 
-      const bidSide = formatSide(bidData[0], bidData[1]);
-      const askSide = formatSide(askData[0], askData[1]);
+      const bidSide = formatSide(bidData[0] ?? bidData.prices, bidData[1] ?? bidData.quantities);
+      const askSide = formatSide(askData[0] ?? askData.prices, askData[1] ?? askData.quantities);
+
+      // Prefer live book depth counts when counter is stale (cancel bug)
+      const openBids = bidSide.length;
+      const openAsks = askSide.length;
 
       setStats({
         totalOrders: Number(statsRaw[0]),
-        bids: Number(statsRaw[1]),
-        asks: Number(statsRaw[2]),
+        bids: openBids,
+        asks: openAsks,
         matches: Number(statsRaw[3]),
         bestBid: bidSide[0]?.price ?? null,
         bestAsk: askSide[0]?.price ?? null,
@@ -113,13 +154,13 @@ export function useMarketLive(contract: Contract | null): MarketLive {
       setReady(true);
       if (isRpcThrottleError(e)) {
         setError(
-          "RPC is rate-limiting requests. Pausing refresh. Try again in a minute."
+          "RPC is rate-limiting. Data will refresh when the node recovers."
         );
       } else {
         const msg = e instanceof Error ? e.message : "read failed";
         setError(
           msg.includes("could not decode") || msg.includes("BAD_DATA")
-            ? "Contract does not respond as TapeOrderBook. Check lib/config.ts address."
+            ? "Contract read failed. Check config address."
             : `Live read failed: ${msg.slice(0, 100)}`
         );
       }
@@ -128,40 +169,14 @@ export function useMarketLive(contract: Contract | null): MarketLive {
     }
   }, []);
 
-  const loadTrades = useCallback(async () => {
-    const c = contractRef.current;
-    if (!c || tradesLoaded.current) return;
-    try {
-      // Small lookback only (public RPC hates large eth_getLogs)
-      const filter = c.filters.OrderMatched();
-      const events = await c.queryFilter(filter, -200);
-      const rows: TradeRow[] = events
-        .map((ev, idx) => {
-          const e = ev as EventLog;
-          const buyId = String(e.args?.buyId ?? 0);
-          const sellId = String(e.args?.sellId ?? 0);
-          return {
-            price: Number(e.args?.price || 0) / 1e9,
-            quantity: Number(e.args?.quantity || 0),
-            buyId,
-            sellId,
-            key: `${e.transactionHash ?? idx}-${buyId}-${sellId}`,
-            ts: Date.now() - (events.length - idx) * 1000,
-          };
-        })
-        .reverse()
-        .slice(0, 30);
-      setTrades(rows);
-      tradesLoaded.current = true;
-    } catch {
-      /* optional history */
-    }
-  }, []);
+  const refreshAll = useCallback(async () => {
+    await refresh();
+    await loadTrades();
+  }, [refresh, loadTrades]);
 
   useEffect(() => {
     if (!contract) return;
     let cancelled = false;
-    tradesLoaded.current = false;
 
     const boot = async () => {
       if (cancelled) return;
@@ -171,13 +186,9 @@ export function useMarketLive(contract: Contract | null): MarketLive {
     };
     void boot();
 
-    // Slow poll + skip overlapping refreshes (avoids -32002 on public RPC)
     const iv = setInterval(() => {
       void refresh();
     }, POLL_MS);
-
-    // No contract.on() subscriptions: ethers polls eth_getLogs aggressively
-    // and trips public BOT RPC rate limits.
 
     return () => {
       cancelled = true;
@@ -194,5 +205,6 @@ export function useMarketLive(contract: Contract | null): MarketLive {
     asks,
     trades,
     refresh,
+    refreshAll,
   };
 }

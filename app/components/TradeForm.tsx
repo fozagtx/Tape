@@ -5,6 +5,7 @@ import { Button, ButtonGroup, Input, Chip, cn } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { ethers } from "ethers";
 import { useWallet } from "./WalletProvider";
+import { useMarket } from "./MarketProvider";
 import { CHAIN_CONFIG } from "@/lib/config";
 import Panel from "./ui/panel";
 import CellValue from "./ui/cell-value";
@@ -16,6 +17,7 @@ const QTY_PRESETS = [1, 5, 10, 25, 50, 100];
 
 export default function TradeForm() {
   const { isConnected, writeContract, chainId } = useWallet();
+  const { refreshAll } = useMarket();
   const [side, setSide] = useState<Side>("buy");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -70,6 +72,8 @@ export default function TradeForm() {
       const receipt = await tx.wait();
       setTxHash(receipt.hash);
       setQuantity("");
+      // Pull fresh book/stats/trades right after the tx lands
+      void refreshAll();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Transaction failed";
       if (msg.includes("user rejected") || msg.includes("ACTION_REJECTED")) {

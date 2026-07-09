@@ -80,28 +80,30 @@ export default function MarketStats() {
     {
       title: "Mid / last",
       value: loading ? null : mid != null ? mid.toFixed(4) : "-",
-      hint: mid != null ? "gwei" : "no quote",
+      hint: mid != null ? "gwei" : "empty book",
       changeType: "warning",
       icon: "solar:chart-2-linear",
     },
     {
       title: "Open bids",
       value: loading ? null : String(stats.bids),
-      hint: "resting",
+      hint: stats.bids === 0 ? "none resting" : "resting",
       changeType: "positive",
       icon: "solar:arrow-up-linear",
     },
     {
       title: "Open asks",
       value: loading ? null : String(stats.asks),
-      hint: "resting",
+      hint: stats.asks === 0 ? "none resting" : "resting",
       changeType: "negative",
       icon: "solar:arrow-down-linear",
     },
     {
       title: "Matches",
       value: loading ? null : String(stats.matches),
-      hint: live ? "live" : `${stats.totalOrders} orders`,
+      hint: live
+        ? `${stats.totalOrders} orders total · live`
+        : `${stats.totalOrders} orders total`,
       changeType: "neutral",
       icon: "solar:transfer-horizontal-linear",
     },

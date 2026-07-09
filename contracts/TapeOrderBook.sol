@@ -87,8 +87,14 @@ contract TapeOrderBook {
         require(o.trader == msg.sender, "not owner");
         require(o.quantity > 0, "already filled");
 
+        bool wasBuy = o.isBuy;
         _removeFromBook(id);
         o.quantity = 0;
+        if (wasBuy) {
+            if (totalBids > 0) totalBids--;
+        } else {
+            if (totalAsks > 0) totalAsks--;
+        }
         emit OrderCancelled(id, msg.sender);
     }
 

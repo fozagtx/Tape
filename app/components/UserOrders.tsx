@@ -5,6 +5,7 @@ import { Button, Chip, Skeleton } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import type { EventLog } from "ethers";
 import { useWallet } from "./WalletProvider";
+import { useMarket } from "./MarketProvider";
 import Panel from "./ui/panel";
 import ListHeader from "./ui/list-header";
 import EmptyState from "./ui/empty-state";
@@ -21,6 +22,7 @@ const COLS =
 
 export default function UserOrders() {
   const { contract, writeContract, address, isConnected } = useWallet();
+  const { refreshAll } = useMarket();
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,7 @@ export default function UserOrders() {
       const tx = await writeContract.cancelOrder(id);
       await tx.wait();
       setOrders((prev) => prev.filter((o) => o.id !== id));
+      void refreshAll();
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Cancel failed";
       if (msg.includes("user rejected")) {
