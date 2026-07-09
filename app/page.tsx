@@ -59,7 +59,7 @@ const STEPS = [
 
 export default function LandingPage() {
   return (
-    <div className="relative flex min-h-dvh w-full flex-col overflow-x-hidden bg-background">
+    <div className="relative flex min-h-dvh w-full flex-col bg-background">
       <LandingHeader />
 
       <main className="flex flex-1 flex-col">
