@@ -11,6 +11,7 @@ import React, {
 import { ethers } from "ethers";
 import { CHAIN_CONFIG } from "@/lib/config";
 import { TAPE_ABI } from "@/lib/abi";
+import { getReadProvider, isRpcThrottleError } from "@/lib/rpc";
 
 interface WalletState {
   address: string | null;
@@ -20,7 +21,6 @@ interface WalletState {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
-  /** Signer-bound contract when wallet is connected; otherwise null (read path used). */
   writeContract: ethers.Contract | null;
   error: string | null;
   hasWallet: boolean;
@@ -34,12 +34,10 @@ interface WalletContextType {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
-  /** Always CHAIN_CONFIG.contractAddress - for reads or writes. */
   contract: ethers.Contract;
   contractAddress: string;
   error: string | null;
   hasWallet: boolean;
-  /** Resolves true when wallet is connected and ready. */
   connect: () => Promise<boolean>;
   disconnect: () => void;
   switchChain: () => Promise<void>;
@@ -50,15 +48,13 @@ const WalletContext = createContext<WalletContextType | null>(null);
 
 export const CONTRACT_ADDRESS = CHAIN_CONFIG.contractAddress;
 
-const readProvider = new ethers.JsonRpcProvider(CHAIN_CONFIG.rpcUrl);
 const readContract = new ethers.Contract(
   CONTRACT_ADDRESS,
   TAPE_ABI,
-  readProvider
+  getReadProvider()
 );
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-
   const [state, setState] = useState<WalletState>({
     address: null,
     balance: "0",
@@ -108,8 +104,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
       const signer = await provider.getSigner();
       const network = await provider.getNetwork();
-      const balance = await provider.getBalance(accounts[0]);
       const chainId = Number(network.chainId);
+
+      // Balance is best-effort: public BOT RPC often rate-limits eth_getBalance
+      let balance = "0";
+      try {
+        const bal = await provider.getBalance(accounts[0]);
+        balance = ethers.formatEther(bal);
+      } catch (balErr) {
+        if (!isRpcThrottleError(balErr)) {
+          console.warn("getBalance failed", balErr);
+        }
+        // still connect; balance can stay 0 until RPC recovers
+      }
+
       const writeContract = new ethers.Contract(
         CONTRACT_ADDRESS,
         TAPE_ABI,
@@ -118,7 +126,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       setState({
         address: accounts[0],
-        balance: ethers.formatEther(balance),
+        balance,
         chainId,
         isConnected: true,
         isConnecting: false,
@@ -132,9 +140,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "Failed to connect wallet";
-      const friendly = msg.includes("user rejected")
+      let friendly = msg.includes("user rejected")
         ? "Connection rejected in wallet."
         : msg;
+      if (isRpcThrottleError(err)) {
+        friendly =
+          "BOT RPC is busy (rate limited). Wait ~30s and try again, or switch MetaMask RPC.";
+      }
       setState((s) => ({
         ...s,
         isConnecting: false,
@@ -234,10 +246,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     ).ethereum;
 
     const handleAccountsChanged = () => {
-      if (state.isConnected) connect();
+      if (state.isConnected) void connect();
     };
     const handleChainChanged = () => {
-      if (state.isConnected) connect();
+      if (state.isConnected) void connect();
     };
 
     ethereum.on?.("accountsChanged", handleAccountsChanged);

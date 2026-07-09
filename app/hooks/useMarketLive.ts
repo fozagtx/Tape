@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Contract } from "ethers";
 import type { EventLog } from "ethers";
+import { isRpcThrottleError } from "@/lib/rpc";
 
 export type BookEntry = {
   price: number;
@@ -48,6 +49,9 @@ const EMPTY_STATS: MarketStats = {
   bestAsk: null,
 };
 
+/** Public BOT RPC throttles if we poll too hard */
+const POLL_MS = 6000;
+
 function formatSide(prices: bigint[], qtys: bigint[]): BookEntry[] {
   let running = 0;
   return prices.map((p, i) => {
@@ -59,8 +63,8 @@ function formatSide(prices: bigint[], qtys: bigint[]): BookEntry[] {
 }
 
 /**
- * Real-time market data: poll + contract event push.
- * Does NOT swallow permanent contract failures as "empty book".
+ * Live market data with light RPC usage.
+ * Poll only (no eth_getLogs subscriptions) so public endpoints stay healthy.
  */
 export function useMarketLive(contract: Contract | null): MarketLive {
   const [ready, setReady] = useState(false);
@@ -71,65 +75,66 @@ export function useMarketLive(contract: Contract | null): MarketLive {
   const [asks, setAsks] = useState<BookEntry[]>([]);
   const [trades, setTrades] = useState<TradeRow[]>([]);
   const contractRef = useRef(contract);
+  const inflight = useRef(false);
+  const tradesLoaded = useRef(false);
   contractRef.current = contract;
 
   const refresh = useCallback(async () => {
     const c = contractRef.current;
-    if (!c) return;
+    if (!c || inflight.current) return;
+    inflight.current = true;
 
     try {
-      // Health + core reads in parallel
+      // 3 calls only (batched by provider). Best bid/ask from book sides.
       const [statsRaw, bidData, askData] = await Promise.all([
         c.stats(),
-        c.getBookSide(true, 20),
-        c.getBookSide(false, 20),
+        c.getBookSide(true, 15),
+        c.getBookSide(false, 15),
       ]);
 
-      let bestBid: number | null = null;
-      let bestAsk: number | null = null;
-      try {
-        const bb = await c.getBestBid();
-        const ba = await c.getBestAsk();
-        const bp = Number(bb.price ?? bb[0] ?? 0) / 1e9;
-        const ap = Number(ba.price ?? ba[0] ?? 0) / 1e9;
-        bestBid = bp > 0 ? bp : null;
-        bestAsk = ap > 0 ? ap : null;
-      } catch {
-        /* optional */
-      }
+      const bidSide = formatSide(bidData[0], bidData[1]);
+      const askSide = formatSide(askData[0], askData[1]);
 
       setStats({
         totalOrders: Number(statsRaw[0]),
         bids: Number(statsRaw[1]),
         asks: Number(statsRaw[2]),
         matches: Number(statsRaw[3]),
-        bestBid,
-        bestAsk,
+        bestBid: bidSide[0]?.price ?? null,
+        bestAsk: askSide[0]?.price ?? null,
       });
-      setBids(formatSide(bidData[0], bidData[1]));
-      setAsks(formatSide(askData[0], askData[1]));
+      setBids(bidSide);
+      setAsks(askSide);
       setLive(true);
       setError(null);
       setReady(true);
     } catch (e) {
       setLive(false);
       setReady(true);
-      const msg = e instanceof Error ? e.message : "read failed";
-      setError(
-        msg.includes("could not decode") || msg.includes("BAD_DATA")
-          ? "Contract at config address does not respond as TapeOrderBook. Deploy the real contract and update lib/config.ts."
-          : `Live read failed: ${msg.slice(0, 120)}`
-      );
+      if (isRpcThrottleError(e)) {
+        setError(
+          "RPC is rate-limiting requests. Pausing refresh. Try again in a minute."
+        );
+      } else {
+        const msg = e instanceof Error ? e.message : "read failed";
+        setError(
+          msg.includes("could not decode") || msg.includes("BAD_DATA")
+            ? "Contract does not respond as TapeOrderBook. Check lib/config.ts address."
+            : `Live read failed: ${msg.slice(0, 100)}`
+        );
+      }
+    } finally {
+      inflight.current = false;
     }
   }, []);
 
-  // Load trade history once + keep listening
   const loadTrades = useCallback(async () => {
     const c = contractRef.current;
-    if (!c) return;
+    if (!c || tradesLoaded.current) return;
     try {
+      // Small lookback only (public RPC hates large eth_getLogs)
       const filter = c.filters.OrderMatched();
-      const events = await c.queryFilter(filter, -2000);
+      const events = await c.queryFilter(filter, -200);
       const rows: TradeRow[] = events
         .map((ev, idx) => {
           const e = ev as EventLog;
@@ -145,16 +150,18 @@ export function useMarketLive(contract: Contract | null): MarketLive {
           };
         })
         .reverse()
-        .slice(0, 40);
+        .slice(0, 30);
       setTrades(rows);
+      tradesLoaded.current = true;
     } catch {
-      /* history optional if book works */
+      /* optional history */
     }
   }, []);
 
   useEffect(() => {
     if (!contract) return;
     let cancelled = false;
+    tradesLoaded.current = false;
 
     const boot = async () => {
       if (cancelled) return;
@@ -164,59 +171,17 @@ export function useMarketLive(contract: Contract | null): MarketLive {
     };
     void boot();
 
-    // Poll backup (events can drop on some public RPCs)
+    // Slow poll + skip overlapping refreshes (avoids -32002 on public RPC)
     const iv = setInterval(() => {
       void refresh();
-    }, 2000);
+    }, POLL_MS);
 
-    const onBookChange = () => {
-      void refresh();
-    };
-
-    const onMatch = (
-      buyId: bigint,
-      sellId: bigint,
-      _buyer: string,
-      _seller: string,
-      price: bigint,
-      qty: bigint
-    ) => {
-      setTrades((prev) =>
-        [
-          {
-            price: Number(price) / 1e9,
-            quantity: Number(qty),
-            buyId: String(buyId),
-            sellId: String(sellId),
-            key: `${Date.now()}-${buyId}-${sellId}`,
-            ts: Date.now(),
-          },
-          ...prev,
-        ].slice(0, 40)
-      );
-      void refresh();
-    };
-
-    try {
-      contract.on("OrderPlaced", onBookChange);
-      contract.on("OrderCancelled", onBookChange);
-      contract.on("OrderMatched", onMatch);
-      contract.on("OrderFilled", onBookChange);
-    } catch {
-      /* provider may not support filters */
-    }
+    // No contract.on() subscriptions: ethers polls eth_getLogs aggressively
+    // and trips public BOT RPC rate limits.
 
     return () => {
       cancelled = true;
       clearInterval(iv);
-      try {
-        contract.off("OrderPlaced", onBookChange);
-        contract.off("OrderCancelled", onBookChange);
-        contract.off("OrderMatched", onMatch);
-        contract.off("OrderFilled", onBookChange);
-      } catch {
-        /* ignore */
-      }
     };
   }, [contract, refresh, loadTrades]);
 
