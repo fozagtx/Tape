@@ -41,6 +41,7 @@ export default function LandingHeader() {
     setBusy(true);
     try {
       const ok = await connect();
+      // connect() flushSyncs isConnected so /trade won't bounce to landing
       if (ok) router.push("/trade");
     } finally {
       setBusy(false);

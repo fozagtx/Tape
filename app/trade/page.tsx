@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Link, Spinner } from "@heroui/react";
+import { Button, Link, Spinner } from "@heroui/react";
 import Header from "../components/Header";
 import OrderBook from "../components/OrderBook";
 import TradeForm from "../components/TradeForm";
@@ -11,32 +11,86 @@ import RecentTrades from "../components/RecentTrades";
 import UserOrders from "../components/UserOrders";
 import PriceChart from "../components/PriceChart";
 import { MarketProvider } from "../components/MarketProvider";
-import { useWallet } from "../components/WalletProvider";
+import { useWallet, hasWalletSession } from "../components/WalletProvider";
 
 /**
- * Trading dashboard - only after wallet connect.
- * Unauthenticated users are sent back to the landing page (/).
+ * Trading dashboard — after wallet connect.
+ * Waits for session restore so we don't bounce back to landing mid-connect.
  */
 export default function TradePage() {
   const router = useRouter();
-  const { isConnected } = useWallet();
+  const { isConnected, isConnecting, connect } = useWallet();
+  const [ready, setReady] = useState(false);
 
+  // Give connect state time to land; try silent restore if session exists
   useEffect(() => {
-    if (!isConnected) {
-      router.replace("/");
-    }
-  }, [isConnected, router]);
+    let cancelled = false;
+
+    const boot = async () => {
+      if (isConnected) {
+        if (!cancelled) setReady(true);
+        return;
+      }
+
+      // Wallet already connected this session — rehydrate without prompt
+      if (hasWalletSession()) {
+        try {
+          await connect();
+        } catch {
+          /* fall through */
+        }
+      }
+
+      // Small grace period for flushSync / navigation race
+      await new Promise((r) => setTimeout(r, 400));
+      if (!cancelled) setReady(true);
+    };
+
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+    // run once on mount; isConnected updates will re-render dashboard
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Only kick to landing after we've finished the boot check
+  useEffect(() => {
+    if (!ready) return;
+    if (isConnected || isConnecting) return;
+
+    const t = setTimeout(() => {
+      // Final check — still not connected
+      if (!isConnected) router.replace("/");
+    }, 600);
+
+    return () => clearTimeout(t);
+  }, [ready, isConnected, isConnecting, router]);
+
+  if (!ready || isConnecting) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background px-4">
+        <Spinner color="primary" size="lg" />
+        <p className="text-small text-default-500">Opening dashboard…</p>
+      </div>
+    );
+  }
 
   if (!isConnected) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background">
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-4">
         <Spinner color="primary" size="lg" />
-        <p className="text-small text-default-500">
-          Connect a wallet to open the book…
+        <p className="text-center text-small text-default-500">
+          Connect a wallet to open the book
         </p>
-        <Link href="/" size="sm" className="text-primary">
-          Back to home
-        </Link>
+        <div className="flex gap-2">
+          <Button color="primary" radius="full" onPress={() => void connect()}>
+            Connect wallet
+          </Button>
+          <Button as={Link} href="/" variant="flat" radius="full">
+            Home
+          </Button>
+        </div>
       </div>
     );
   }

@@ -8,10 +8,13 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
+import { flushSync } from "react-dom";
 import { ethers } from "ethers";
 import { CHAIN_CONFIG } from "@/lib/config";
 import { TAPE_ABI } from "@/lib/abi";
 import { getReadProvider, isRpcThrottleError } from "@/lib/rpc";
+
+const SESSION_KEY = "tape_wallet_connected";
 
 interface WalletState {
   address: string | null;
@@ -21,7 +24,6 @@ interface WalletState {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
-  /** Signer-bound — place/cancel only. Never use for polling. */
   writeContract: ethers.Contract | null;
   error: string | null;
   hasWallet: boolean;
@@ -35,12 +37,7 @@ interface WalletContextType {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
-  /**
-   * Always the public-RPC read contract.
-   * Market polls MUST use this so MetaMask is not hammered with eth_calls.
-   */
   contract: ethers.Contract;
-  /** Wallet signer contract for transactions. Null if not connected. */
   writeContract: ethers.Contract | null;
   contractAddress: string;
   error: string | null;
@@ -56,12 +53,35 @@ const WalletContext = createContext<WalletContextType | null>(null);
 
 export const CONTRACT_ADDRESS = CHAIN_CONFIG.contractAddress;
 
-/** Single public-RPC contract for all reads */
 const readContract = new ethers.Contract(
   CONTRACT_ADDRESS,
   TAPE_ABI,
   getReadProvider()
 );
+
+function markSession(address: string) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, address);
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function hasWalletSession(): boolean {
+  try {
+    return Boolean(sessionStorage.getItem(SESSION_KEY));
+  } catch {
+    return false;
+  }
+}
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<WalletState>({
@@ -77,7 +97,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     hasWallet: true,
   });
 
-  /** Balance via public read RPC (not MetaMask) — avoids MM balance spam */
   const refreshBalance = useCallback(async () => {
     const addr = state.address;
     if (!addr) return;
@@ -85,7 +104,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const bal = await getReadProvider().getBalance(addr);
       setState((s) => ({ ...s, balance: ethers.formatEther(bal) }));
     } catch {
-      /* keep previous balance if RPC is throttled */
+      /* keep previous */
     }
   }, [state.address]);
 
@@ -113,8 +132,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const ethereum = (
         window as unknown as { ethereum: ethers.Eip1193Provider }
       ).ethereum;
-      // Only request accounts + chainId via wallet. Do NOT call eth_getBalance
-      // through MetaMask (public BOT RPC returns -32002 under load).
+
       const accounts = (await ethereum.request({
         method: "eth_requestAccounts",
       })) as string[];
@@ -127,10 +145,15 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      const chainHex = (await ethereum.request({
-        method: "eth_chainId",
-      })) as string;
-      const chainId = parseInt(chainHex, 16);
+      let chainId = 0;
+      try {
+        const chainHex = (await ethereum.request({
+          method: "eth_chainId",
+        })) as string;
+        chainId = parseInt(chainHex, 16);
+      } catch {
+        chainId = 0;
+      }
 
       const provider = new ethers.BrowserProvider(ethereum);
       const signer = await provider.getSigner();
@@ -140,20 +163,23 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         signer
       );
 
-      setState({
-        address: accounts[0],
-        balance: "—",
-        chainId,
-        isConnected: true,
-        isConnecting: false,
-        provider,
-        signer,
-        writeContract,
-        error: null,
-        hasWallet: true,
+      // Force React to commit before navigation so /trade sees isConnected
+      flushSync(() => {
+        setState({
+          address: accounts[0],
+          balance: "—",
+          chainId,
+          isConnected: true,
+          isConnecting: false,
+          provider,
+          signer,
+          writeContract,
+          error: null,
+          hasWallet: true,
+        });
       });
+      markSession(accounts[0]);
 
-      // Balance later via public RPC (non-blocking)
       void getReadProvider()
         .getBalance(accounts[0])
         .then((bal) => {
@@ -163,9 +189,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
               : s
           );
         })
-        .catch(() => {
-          /* RPC busy — leave "—" */
-        });
+        .catch(() => {});
 
       return true;
     } catch (err) {
@@ -188,6 +212,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const disconnect = useCallback(() => {
+    clearSession();
     setState((s) => ({
       address: null,
       balance: "—",
@@ -258,6 +283,36 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     setState((s) => ({ ...s, error: null }));
   }, []);
 
+  // Restore session if user already authorized this site (eth_accounts)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!hasWalletSession()) return;
+    if (!(window as unknown as { ethereum?: unknown }).ethereum) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const ethereum = (
+          window as unknown as { ethereum: ethers.Eip1193Provider }
+        ).ethereum;
+        const accounts = (await ethereum.request({
+          method: "eth_accounts",
+        })) as string[];
+        if (cancelled || !accounts?.length) return;
+        // Re-run full connect without prompting if already authorized
+        await connect();
+      } catch {
+        clearSession();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (
       typeof window === "undefined" ||
@@ -276,7 +331,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
     ).ethereum;
 
-    const handleAccountsChanged = () => {
+    const handleAccountsChanged = (accounts: unknown) => {
+      const list = accounts as string[];
+      if (!list?.length) {
+        disconnect();
+        return;
+      }
       if (state.isConnected) void connect();
     };
     const handleChainChanged = () => {
@@ -290,7 +350,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       ethereum.removeListener?.("accountsChanged", handleAccountsChanged);
       ethereum.removeListener?.("chainChanged", handleChainChanged);
     };
-  }, [connect, state.isConnected]);
+  }, [connect, disconnect, state.isConnected]);
 
   const value = useMemo<WalletContextType>(
     () => ({
@@ -301,7 +361,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       isConnecting: state.isConnecting,
       provider: state.provider,
       signer: state.signer,
-      // ALWAYS public RPC for reads — never MetaMask for book/stats polls
       contract: readContract,
       writeContract: state.writeContract,
       contractAddress: CONTRACT_ADDRESS,

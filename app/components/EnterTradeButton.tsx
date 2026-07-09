@@ -11,7 +11,14 @@ type Props = {
   className?: string;
   size?: "sm" | "md" | "lg";
   color?: "primary" | "default";
-  variant?: "solid" | "flat" | "bordered" | "light" | "faded" | "shadow" | "ghost";
+  variant?:
+    | "solid"
+    | "flat"
+    | "bordered"
+    | "light"
+    | "faded"
+    | "shadow"
+    | "ghost";
   fullWidth?: boolean;
   radius?: "none" | "sm" | "md" | "lg" | "full";
 };
@@ -27,7 +34,7 @@ export default function EnterTradeButton({
   radius = "full",
 }: Props) {
   const router = useRouter();
-  const { isConnected, isConnecting, connect } = useWallet();
+  const { isConnected, isConnecting, connect, error } = useWallet();
   const [busy, setBusy] = React.useState(false);
 
   const onPress = async () => {
@@ -38,29 +45,37 @@ export default function EnterTradeButton({
     setBusy(true);
     try {
       const ok = await connect();
-      if (ok) router.push("/trade");
+      if (ok) {
+        // flushSync already applied isConnected — navigate next frame
+        router.push("/trade");
+      }
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Button
-      radius={radius}
-      size={size}
-      color={color}
-      variant={variant}
-      fullWidth={fullWidth}
-      className={className}
-      isLoading={busy || isConnecting}
-      onPress={() => void onPress()}
-      endContent={
-        !(busy || isConnecting) ? (
-          <Icon icon="solar:alt-arrow-right-linear" width={18} />
-        ) : undefined
-      }
-    >
-      {isConnected ? "Open dashboard" : children}
-    </Button>
+    <div className="flex flex-col items-center gap-2">
+      <Button
+        radius={radius}
+        size={size}
+        color={color}
+        variant={variant}
+        fullWidth={fullWidth}
+        className={className}
+        isLoading={busy || isConnecting}
+        onPress={() => void onPress()}
+        endContent={
+          !(busy || isConnecting) ? (
+            <Icon icon="solar:alt-arrow-right-linear" width={18} />
+          ) : undefined
+        }
+      >
+        {isConnected ? "Open dashboard" : children}
+      </Button>
+      {error && (
+        <p className="max-w-sm text-center text-tiny text-danger">{error}</p>
+      )}
+    </div>
   );
 }
