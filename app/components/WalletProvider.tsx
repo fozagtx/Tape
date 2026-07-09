@@ -21,6 +21,7 @@ interface WalletState {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
+  /** Signer-bound — place/cancel only. Never use for polling. */
   writeContract: ethers.Contract | null;
   error: string | null;
   hasWallet: boolean;
@@ -34,7 +35,13 @@ interface WalletContextType {
   isConnecting: boolean;
   provider: ethers.BrowserProvider | null;
   signer: ethers.JsonRpcSigner | null;
+  /**
+   * Always the public-RPC read contract.
+   * Market polls MUST use this so MetaMask is not hammered with eth_calls.
+   */
   contract: ethers.Contract;
+  /** Wallet signer contract for transactions. Null if not connected. */
+  writeContract: ethers.Contract | null;
   contractAddress: string;
   error: string | null;
   hasWallet: boolean;
@@ -42,12 +49,14 @@ interface WalletContextType {
   disconnect: () => void;
   switchChain: () => Promise<void>;
   clearError: () => void;
+  refreshBalance: () => Promise<void>;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export const CONTRACT_ADDRESS = CHAIN_CONFIG.contractAddress;
 
+/** Single public-RPC contract for all reads */
 const readContract = new ethers.Contract(
   CONTRACT_ADDRESS,
   TAPE_ABI,
@@ -57,7 +66,7 @@ const readContract = new ethers.Contract(
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<WalletState>({
     address: null,
-    balance: "0",
+    balance: "—",
     chainId: null,
     isConnected: false,
     isConnecting: false,
@@ -67,6 +76,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     error: null,
     hasWallet: true,
   });
+
+  /** Balance via public read RPC (not MetaMask) — avoids MM balance spam */
+  const refreshBalance = useCallback(async () => {
+    const addr = state.address;
+    if (!addr) return;
+    try {
+      const bal = await getReadProvider().getBalance(addr);
+      setState((s) => ({ ...s, balance: ethers.formatEther(bal) }));
+    } catch {
+      /* keep previous balance if RPC is throttled */
+    }
+  }, [state.address]);
 
   const connect = useCallback(async (): Promise<boolean> => {
     if (
@@ -92,8 +113,11 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       const ethereum = (
         window as unknown as { ethereum: ethers.Eip1193Provider }
       ).ethereum;
-      const provider = new ethers.BrowserProvider(ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []);
+      // Only request accounts + chainId via wallet. Do NOT call eth_getBalance
+      // through MetaMask (public BOT RPC returns -32002 under load).
+      const accounts = (await ethereum.request({
+        method: "eth_requestAccounts",
+      })) as string[];
       if (!accounts?.length) {
         setState((s) => ({
           ...s,
@@ -102,22 +126,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         }));
         return false;
       }
+
+      const chainHex = (await ethereum.request({
+        method: "eth_chainId",
+      })) as string;
+      const chainId = parseInt(chainHex, 16);
+
+      const provider = new ethers.BrowserProvider(ethereum);
       const signer = await provider.getSigner();
-      const network = await provider.getNetwork();
-      const chainId = Number(network.chainId);
-
-      // Balance is best-effort: public BOT RPC often rate-limits eth_getBalance
-      let balance = "0";
-      try {
-        const bal = await provider.getBalance(accounts[0]);
-        balance = ethers.formatEther(bal);
-      } catch (balErr) {
-        if (!isRpcThrottleError(balErr)) {
-          console.warn("getBalance failed", balErr);
-        }
-        // still connect; balance can stay 0 until RPC recovers
-      }
-
       const writeContract = new ethers.Contract(
         CONTRACT_ADDRESS,
         TAPE_ABI,
@@ -126,7 +142,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       setState({
         address: accounts[0],
-        balance,
+        balance: "—",
         chainId,
         isConnected: true,
         isConnecting: false,
@@ -136,6 +152,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         error: null,
         hasWallet: true,
       });
+
+      // Balance later via public RPC (non-blocking)
+      void getReadProvider()
+        .getBalance(accounts[0])
+        .then((bal) => {
+          setState((s) =>
+            s.address === accounts[0]
+              ? { ...s, balance: ethers.formatEther(bal) }
+              : s
+          );
+        })
+        .catch(() => {
+          /* RPC busy — leave "—" */
+        });
+
       return true;
     } catch (err) {
       const msg =
@@ -145,7 +176,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         : msg;
       if (isRpcThrottleError(err)) {
         friendly =
-          "BOT RPC is busy (rate limited). Wait ~30s and try again, or switch MetaMask RPC.";
+          "BOT public RPC is rate-limited. Wait ~30s and try again.";
       }
       setState((s) => ({
         ...s,
@@ -159,7 +190,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const disconnect = useCallback(() => {
     setState((s) => ({
       address: null,
-      balance: "0",
+      balance: "—",
       chainId: null,
       isConnected: false,
       isConnecting: false,
@@ -270,7 +301,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       isConnecting: state.isConnecting,
       provider: state.provider,
       signer: state.signer,
-      contract: state.writeContract ?? readContract,
+      // ALWAYS public RPC for reads — never MetaMask for book/stats polls
+      contract: readContract,
+      writeContract: state.writeContract,
       contractAddress: CONTRACT_ADDRESS,
       error: state.error,
       hasWallet: state.hasWallet,
@@ -278,8 +311,9 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       disconnect,
       switchChain,
       clearError,
+      refreshBalance,
     }),
-    [state, connect, disconnect, switchChain, clearError]
+    [state, connect, disconnect, switchChain, clearError, refreshBalance]
   );
 
   return (

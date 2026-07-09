@@ -15,7 +15,7 @@ type Side = "buy" | "sell";
 const QTY_PRESETS = [1, 5, 10, 25, 50, 100];
 
 export default function TradeForm() {
-  const { isConnected, contract, chainId } = useWallet();
+  const { isConnected, writeContract, chainId } = useWallet();
   const [side, setSide] = useState<Side>("buy");
   const [price, setPrice] = useState("");
   const [quantity, setQuantity] = useState("");
@@ -34,10 +34,11 @@ export default function TradeForm() {
   const total = valid ? (priceNum * qtyNum).toFixed(4) : "-";
 
   const onCorrectChain = chainId === CHAIN_CONFIG.chainId;
-  const canSubmit = isConnected && onCorrectChain && valid && !isSubmitting;
+  const canSubmit =
+    isConnected && !!writeContract && onCorrectChain && valid && !isSubmitting;
 
   const handleSubmit = async () => {
-    if (!isConnected) {
+    if (!isConnected || !writeContract) {
       setError("Connect your wallet to place an order.");
       return;
     }
@@ -61,7 +62,11 @@ export default function TradeForm() {
     try {
       const priceGwei = ethers.parseUnits(price, "gwei");
       const qty = BigInt(Math.floor(qtyNum));
-      const tx = await contract.placeOrder(side === "buy", priceGwei, qty);
+      const tx = await writeContract.placeOrder(
+        side === "buy",
+        priceGwei,
+        qty
+      );
       const receipt = await tx.wait();
       setTxHash(receipt.hash);
       setQuantity("");
@@ -69,6 +74,14 @@ export default function TradeForm() {
       const msg = err instanceof Error ? err.message : "Transaction failed";
       if (msg.includes("user rejected") || msg.includes("ACTION_REJECTED")) {
         setError("You rejected the transaction.");
+      } else if (
+        msg.includes("-32002") ||
+        msg.includes("too many errors") ||
+        msg.includes("coalesce")
+      ) {
+        setError(
+          "BOT RPC is rate-limited. Wait ~30s, then try the transaction again."
+        );
       } else {
         setError(msg.length > 180 ? msg.slice(0, 180) + "…" : msg);
       }

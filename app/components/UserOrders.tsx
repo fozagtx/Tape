@@ -20,7 +20,7 @@ const COLS =
   "grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)_44px_72px]";
 
 export default function UserOrders() {
-  const { contract, address, isConnected } = useWallet();
+  const { contract, writeContract, address, isConnected } = useWallet();
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +32,9 @@ export default function UserOrders() {
       if (!contract || !address) return;
       if (!opts?.silent) setLoading(true);
       try {
+        // Public read RPC only; tiny lookback to avoid eth_getLogs storms
         const filter = contract.filters.OrderPlaced(null, address);
-        const events = await contract.queryFilter(filter, -5000);
+        const events = await contract.queryFilter(filter, -150);
         const parsed: UserOrder[] = [];
         for (const ev of events) {
           const e = ev as EventLog;
@@ -55,7 +56,7 @@ export default function UserOrders() {
         setOrders(parsed.reverse());
         setError(null);
       } catch {
-        setError("Could not load your open orders.");
+        setError("Could not load open orders. RPC may be busy.");
       } finally {
         setLoading(false);
       }
@@ -72,7 +73,7 @@ export default function UserOrders() {
     })();
     const iv = setInterval(() => {
       void fetchOrders({ silent: true });
-    }, 5000);
+    }, 12000);
     return () => {
       cancelled = true;
       clearInterval(iv);
@@ -80,20 +81,29 @@ export default function UserOrders() {
   }, [fetchOrders, contract, address]);
 
   const handleCancel = async (id: number) => {
-    if (!contract) return;
+    if (!writeContract) {
+      setCancelError("Connect wallet to cancel.");
+      return;
+    }
     setCancelling(id);
     setCancelError(null);
     try {
-      const tx = await contract.cancelOrder(id);
+      const tx = await writeContract.cancelOrder(id);
       await tx.wait();
       setOrders((prev) => prev.filter((o) => o.id !== id));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Cancel failed";
-      setCancelError(
-        msg.includes("user rejected")
-          ? "Cancel rejected in wallet."
-          : "Could not cancel order. Try again."
-      );
+      if (msg.includes("user rejected")) {
+        setCancelError("Cancel rejected in wallet.");
+      } else if (
+        msg.includes("-32002") ||
+        msg.includes("too many errors") ||
+        msg.includes("coalesce")
+      ) {
+        setCancelError("RPC rate-limited. Wait ~30s and retry cancel.");
+      } else {
+        setCancelError("Could not cancel order. Try again.");
+      }
     } finally {
       setCancelling(null);
     }
