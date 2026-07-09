@@ -18,6 +18,7 @@ import NextLink from "next/link";
 import { useRouter } from "next/navigation";
 import { useWallet } from "./WalletProvider";
 import ThemeSwitch from "./ThemeSwitch";
+import Logo from "./Logo";
 
 const nav = [
   { label: "How it works", href: "#how" },
@@ -64,11 +65,8 @@ export default function LandingHeader() {
           item: "hidden md:flex",
         }}
       >
-        <NavbarBrand as={NextLink} href="/" className="min-w-0 gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-            <span className="font-mono text-small font-bold">T</span>
-          </div>
-          <span className="text-small font-medium text-foreground">Tape</span>
+        <NavbarBrand as={NextLink} href="/" className="min-w-0">
+          <Logo size={32} showWordmark />
         </NavbarBrand>
 
         <NavbarContent justify="center" className="hidden gap-6 md:flex">

@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { useWallet } from "./WalletProvider";
 import { CHAIN_CONFIG } from "@/lib/config";
 import ThemeSwitch from "./ThemeSwitch";
+import Logo from "./Logo";
 
 function shortAddr(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -58,18 +59,11 @@ export default function Header() {
           wrapper: "w-full max-w-[var(--tape-max)] px-4 md:px-6 lg:px-8",
         }}
       >
-        <NavbarBrand as={NextLink} href="/" className="min-w-0 gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-            <span className="font-mono text-small font-bold">T</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-small font-medium leading-tight text-foreground">
-              Tape
-            </p>
-            <p className="hidden text-tiny leading-tight text-default-500 sm:block">
-              Trade
-            </p>
-          </div>
+        <NavbarBrand as={NextLink} href="/" className="min-w-0 gap-2">
+          <Logo size={32} showWordmark />
+          <span className="hidden text-tiny text-default-500 sm:inline">
+            Trade
+          </span>
         </NavbarBrand>
 
         <NavbarContent justify="end" className="gap-2">

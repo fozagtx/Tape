@@ -7,6 +7,7 @@ import { Icon } from "@iconify/react";
 import LandingHeader from "./components/LandingHeader";
 import EnterTradeButton from "./components/EnterTradeButton";
 import ActionCard from "./components/ui/action-card";
+import Logo from "./components/Logo";
 
 const FEATURES = [
   {
@@ -219,11 +220,9 @@ export default function LandingPage() {
       <footer className="border-t border-default-100 pb-[env(safe-area-inset-bottom)]">
         <div className="tape-shell flex flex-col items-center justify-between gap-4 py-6 sm:flex-row">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-foreground text-background">
-              <span className="font-mono text-tiny font-bold">T</span>
-            </div>
+            <Logo size={28} showWordmark />
             <span className="text-small text-default-500">
-              Tape · on-chain order book
+              · on-chain order book
             </span>
           </div>
           <Link

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" role="img" aria-label="Tape">
+  <rect width="32" height="32" rx="8" fill="currentColor"/>
+  <path
+    d="M9 10h14v3.25h-5.25V23h-3.5V13.25H9V10z"
+    fill="var(--logo-fg, #0c0d10)"
+  />
+</svg>

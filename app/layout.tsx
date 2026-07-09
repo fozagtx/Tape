@@ -17,7 +17,10 @@ export const metadata: Metadata = {
   title: "Tape | On-chain limit order book",
   description:
     "Fully on-chain limit order book. Place, match, and cancel as confirmed transactions.",
-  icons: { icon: "/favicon.ico" },
+  icons: {
+    icon: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
+    apple: "/logo-mark.svg",
+  },
 };
 
 export default function RootLayout({
