@@ -129,6 +129,7 @@ export default function LandingHeader() {
           <NavbarMenuItem className="flex justify-center py-2">
             <ThemeSwitch />
           </NavbarMenuItem>
+          {/* One connect control only (mirrors header — no extra mid-page CTAs) */}
           <NavbarMenuItem>
             <Button
               fullWidth
@@ -138,7 +139,11 @@ export default function LandingHeader() {
               isLoading={busy || isConnecting}
               onPress={() => void enterTrade()}
             >
-              {isConnected ? "Open dashboard" : "Connect & trade"}
+              {isConnected
+                ? "Open dashboard"
+                : hasWallet === false
+                  ? "Install wallet"
+                  : "Connect & trade"}
             </Button>
           </NavbarMenuItem>
         </NavbarMenu>

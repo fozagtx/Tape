@@ -34,7 +34,7 @@ const FEATURES = [
     icon: "solar:wallet-linear",
     title: "Wallet trading",
     description:
-      "Connect a wallet to place limit orders and cancel open ones on-chain.",
+      "Place limit orders and cancel open ones with your wallet on-chain.",
     color: "danger" as const,
   },
 ];
@@ -43,12 +43,12 @@ const STEPS = [
   {
     n: "01",
     title: "Connect wallet",
-    body: "Connect MetaMask or any EVM wallet. The trading dashboard opens after connect.",
+    body: "Use Connect in the header. The trading dashboard opens after you approve.",
   },
   {
     n: "02",
     title: "Place a limit",
-    body: "Set price (gwei) and quantity. The placeOrder transaction rests on the book or matches when prices cross.",
+    body: "Set price (gwei) and quantity. The order rests on the book or matches when prices cross.",
   },
   {
     n: "03",
@@ -63,6 +63,7 @@ export default function LandingPage() {
       <LandingHeader />
 
       <main className="flex flex-1 flex-col">
+        {/* Hero — only primary CTA on the page (plus header) */}
         <section className="tape-shell flex flex-col items-center px-4 pb-16 pt-12 sm:pt-16 md:pb-20 md:pt-20">
           <Chip
             variant="bordered"
@@ -211,32 +212,6 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
-            <div className="mt-8 flex justify-center">
-              <EnterTradeButton
-                className="h-11 min-w-[12rem] bg-foreground font-medium text-background"
-                size="lg"
-              >
-                Connect wallet
-              </EnterTradeButton>
-            </div>
-          </div>
-        </section>
-
-        <section className="border-t border-default-100 bg-content1/50">
-          <div className="tape-shell flex flex-col items-center py-14 text-center md:py-16">
-            <h2 className="max-w-lg text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              Open the book
-            </h2>
-            <p className="mt-3 max-w-md text-small text-default-500">
-              Connect your wallet to enter the dashboard and place a limit
-              order.
-            </p>
-            <EnterTradeButton
-              className="mt-8 h-11 min-w-[12rem] bg-foreground font-medium text-background"
-              size="lg"
-            >
-              Connect wallet
-            </EnterTradeButton>
           </div>
         </section>
       </main>
