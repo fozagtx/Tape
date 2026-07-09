@@ -17,9 +17,14 @@ export const metadata: Metadata = {
   title: "Tape | On-chain limit order book",
   description:
     "Fully on-chain limit order book. Place, match, and cancel as confirmed transactions.",
+  // Favicon: app/icon.tsx + app/apple-icon.tsx (Next file conventions)
+  // Extra SVG for browsers that prefer it
   icons: {
-    icon: [{ url: "/logo-mark.svg", type: "image/svg+xml" }],
-    apple: "/logo-mark.svg",
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [{ url: "/apple-icon", type: "image/png", sizes: "180x180" }],
   },
 };
 
